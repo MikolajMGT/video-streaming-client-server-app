@@ -19,7 +19,7 @@ type Header struct {
 	Ssrc           int32
 }
 
-func NewRtpHeader(payloadType byte, sequenceNumber int16, timestamp int32) *Header {
+func NewHeader(payloadType byte, sequenceNumber int16, timestamp int32) *Header {
 	return &Header{
 		// default values for current implementation
 		Version:   2,
@@ -36,24 +36,24 @@ func NewRtpHeader(payloadType byte, sequenceNumber int16, timestamp int32) *Head
 	}
 }
 
-func (rtpHeader Header) TransformToByteArray() [HeaderSize]byte {
+func (header Header) TransformToBytes() [HeaderSize]byte {
 	return [HeaderSize]byte{
-		rtpHeader.Version<<6 | rtpHeader.Padding<<5 | rtpHeader.Extension<<4 | rtpHeader.CsrcCount,
-		rtpHeader.Marker<<7 | rtpHeader.PayloadType,
-		byte(rtpHeader.SequenceNumber >> 8),
-		byte(rtpHeader.SequenceNumber & 0xFF),
-		byte(rtpHeader.Timestamp >> 24),
-		byte(rtpHeader.Timestamp >> 16),
-		byte(rtpHeader.Timestamp >> 8),
-		byte(rtpHeader.Timestamp & 0xFF),
-		byte(rtpHeader.Ssrc >> 24),
-		byte(rtpHeader.Ssrc >> 16),
-		byte(rtpHeader.Ssrc >> 8),
-		byte(rtpHeader.Ssrc & 0xFF),
+		header.Version<<6 | header.Padding<<5 | header.Extension<<4 | header.CsrcCount,
+		header.Marker<<7 | header.PayloadType,
+		byte(header.SequenceNumber >> 8),
+		byte(header.SequenceNumber & 0xFF),
+		byte(header.Timestamp >> 24),
+		byte(header.Timestamp >> 16),
+		byte(header.Timestamp >> 8),
+		byte(header.Timestamp & 0xFF),
+		byte(header.Ssrc >> 24),
+		byte(header.Ssrc >> 16),
+		byte(header.Ssrc >> 8),
+		byte(header.Ssrc & 0xFF),
 	}
 }
 
-func NewRtpHeaderFromBytes(payload []byte) (*Header, error) {
+func NewHeaderFromBytes(payload []byte) (*Header, error) {
 
 	if len(payload) < HeaderSize {
 		err := errors.New("header is too small, probably broken packet")
@@ -69,19 +69,22 @@ func NewRtpHeaderFromBytes(payload []byte) (*Header, error) {
 	resultRtpHeader.CsrcCount = headerAsBytes[0] & 8
 	resultRtpHeader.Marker = (headerAsBytes[1]) >> 7
 	resultRtpHeader.PayloadType = headerAsBytes[1] & 127
-	resultRtpHeader.SequenceNumber = (int16(headerAsBytes[2]) << 8) + int16(headerAsBytes[3])
-	resultRtpHeader.Timestamp = (int32(headerAsBytes[4]) << 24) + (int32(headerAsBytes[5]) << 16) +
-		(int32(headerAsBytes[6]) << 8) + int32(headerAsBytes[7])
-	resultRtpHeader.Ssrc = (int32(headerAsBytes[8]) << 24) + (int32(headerAsBytes[9]) << 16) +
-		(int32(headerAsBytes[10]) << 8) + int32(headerAsBytes[11])
+	resultRtpHeader.SequenceNumber =
+		(int16(headerAsBytes[2]) << 8) + int16(headerAsBytes[3])
+	resultRtpHeader.Timestamp =
+		(int32(headerAsBytes[4]) << 24) + (int32(headerAsBytes[5]) << 16) +
+			(int32(headerAsBytes[6]) << 8) + int32(headerAsBytes[7])
+	resultRtpHeader.Ssrc =
+		(int32(headerAsBytes[8]) << 24) + (int32(headerAsBytes[9]) << 16) +
+			(int32(headerAsBytes[10]) << 8) + int32(headerAsBytes[11])
 
 	return resultRtpHeader, nil
 }
 
-func (rtpHeader Header) Log() {
+func (header Header) Log() {
 	log.Printf("RTP Header:\n"+
 		"Version: %v, Padding: %v, Extension: %v, CsrcCount: %v, Marker: %v, "+
 		"PayloadType: %v, SequenceNumber: %v, TimeStamp: %v, Ssrc: %v",
-		rtpHeader.Version, rtpHeader.Padding, rtpHeader.Extension, rtpHeader.CsrcCount, rtpHeader.Marker,
-		rtpHeader.PayloadType, rtpHeader.SequenceNumber, rtpHeader.Timestamp, rtpHeader.Ssrc)
+		header.Version, header.Padding, header.Extension, header.CsrcCount, header.Marker,
+		header.PayloadType, header.SequenceNumber, header.Timestamp, header.Ssrc)
 }

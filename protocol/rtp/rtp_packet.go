@@ -6,7 +6,7 @@ type Packet struct {
 	Payload     []byte
 }
 
-func (packet Packet) NewRtpPacket(rtpHeader Header, payloadSize uint32, payload []byte) *Packet {
+func (packet Packet) NewPacket(rtpHeader Header, payloadSize uint32, payload []byte) *Packet {
 	return &Packet{
 		RtpHeader:   rtpHeader,
 		PayloadSize: payloadSize,
@@ -14,9 +14,9 @@ func (packet Packet) NewRtpPacket(rtpHeader Header, payloadSize uint32, payload 
 	}
 }
 
-func (packet Packet) NewRtpPacketFromBytes(packetAsBytes []byte, packetSize uint32) *Packet {
+func (packet Packet) NewPacketFromBytes(packetAsBytes []byte, packetSize uint32) *Packet {
 	headerBytes := packetAsBytes[:12]
-	header, _ := NewRtpHeaderFromBytes(headerBytes)
+	header, _ := NewHeaderFromBytes(headerBytes)
 
 	return &Packet{
 		RtpHeader:   *header,
