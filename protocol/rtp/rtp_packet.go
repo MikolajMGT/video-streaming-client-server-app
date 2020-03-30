@@ -1,26 +1,48 @@
 package rtp
 
 type Packet struct {
-	RtpHeader   Header
-	PayloadSize uint32
+	Header      *Header
+	PayloadSize int
 	Payload     []byte
 }
 
-func (packet Packet) NewPacket(rtpHeader Header, payloadSize uint32, payload []byte) *Packet {
+func NewPacket(rtpHeader *Header, payloadSize int, payload []byte) *Packet {
 	return &Packet{
-		RtpHeader:   rtpHeader,
+		Header:      rtpHeader,
 		PayloadSize: payloadSize,
 		Payload:     payload,
 	}
 }
 
-func (packet Packet) NewPacketFromBytes(packetAsBytes []byte, packetSize uint32) *Packet {
+func NewPacketFromBytes(packetAsBytes []byte, packetSize int) *Packet {
 	headerBytes := packetAsBytes[:12]
 	header, _ := NewHeaderFromBytes(headerBytes)
 
 	return &Packet{
-		RtpHeader:   *header,
+		Header:      header,
 		PayloadSize: packetSize - HeaderSize,
 		Payload:     packetAsBytes[12:],
 	}
+}
+
+func (packet Packet) TransformToBytes() []byte {
+	result := make([]byte, HeaderSize+len(packet.Payload))
+	headerAsBytes := packet.Header.TransformToBytes()
+
+	var currentIndex int
+	for index, item := range headerAsBytes {
+		result[index] = item
+		currentIndex = index + 1
+	}
+
+	for _, item := range packet.Payload {
+		result[currentIndex] = item
+		currentIndex++
+	}
+
+	return result
+}
+
+func (packet Packet) getLength() int {
+	return HeaderSize + len(packet.Payload)
 }

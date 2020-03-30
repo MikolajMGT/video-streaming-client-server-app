@@ -1,4 +1,4 @@
-package congestion
+package util
 
 const (
 	NoCongestion       = 0

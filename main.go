@@ -1,7 +1,13 @@
 package main
 
-import "log"
+import (
+	"os"
+	"streming_server/server"
+)
 
 func main() {
-	log.Println("Testing purposes")
+	port := os.Args[1]
+	srv := server.NewRtspServer(port)
+
+	srv.Start()
 }

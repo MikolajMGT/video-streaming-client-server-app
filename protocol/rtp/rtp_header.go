@@ -8,18 +8,18 @@ import (
 const HeaderSize = 12
 
 type Header struct {
-	Version        byte
-	Padding        byte
-	Extension      byte
-	CsrcCount      byte
-	Marker         byte
-	PayloadType    byte
-	SequenceNumber int16
-	Timestamp      int32
-	Ssrc           int32
+	Version        int
+	Padding        int
+	Extension      int
+	CsrcCount      int
+	Marker         int
+	PayloadType    int
+	SequenceNumber int
+	Timestamp      int
+	Ssrc           int
 }
 
-func NewHeader(payloadType byte, sequenceNumber int16, timestamp int32) *Header {
+func NewHeader(payloadType int, sequenceNumber int, timestamp int) *Header {
 	return &Header{
 		// default values for current implementation
 		Version:   2,
@@ -38,8 +38,8 @@ func NewHeader(payloadType byte, sequenceNumber int16, timestamp int32) *Header 
 
 func (header Header) TransformToBytes() [HeaderSize]byte {
 	return [HeaderSize]byte{
-		header.Version<<6 | header.Padding<<5 | header.Extension<<4 | header.CsrcCount,
-		header.Marker<<7 | header.PayloadType,
+		byte(header.Version<<6 | header.Padding<<5 | header.Extension<<4 | header.CsrcCount),
+		byte(header.Marker<<7 | header.PayloadType),
 		byte(header.SequenceNumber >> 8),
 		byte(header.SequenceNumber & 0xFF),
 		byte(header.Timestamp >> 24),
@@ -63,20 +63,20 @@ func NewHeaderFromBytes(payload []byte) (*Header, error) {
 	resultRtpHeader := &Header{}
 	headerAsBytes := payload[:HeaderSize]
 
-	resultRtpHeader.Version = (headerAsBytes[0]) >> 6
-	resultRtpHeader.Padding = headerAsBytes[0] & 32
-	resultRtpHeader.Extension = headerAsBytes[0] & 16
-	resultRtpHeader.CsrcCount = headerAsBytes[0] & 8
-	resultRtpHeader.Marker = (headerAsBytes[1]) >> 7
-	resultRtpHeader.PayloadType = headerAsBytes[1] & 127
+	resultRtpHeader.Version = int((headerAsBytes[0]) >> 6)
+	resultRtpHeader.Padding = int(headerAsBytes[0] & 32)
+	resultRtpHeader.Extension = int(headerAsBytes[0] & 16)
+	resultRtpHeader.CsrcCount = int(headerAsBytes[0] & 8)
+	resultRtpHeader.Marker = int((headerAsBytes[1]) >> 7)
+	resultRtpHeader.PayloadType = int(headerAsBytes[1] & 127)
 	resultRtpHeader.SequenceNumber =
-		(int16(headerAsBytes[2]) << 8) + int16(headerAsBytes[3])
+		(int(headerAsBytes[2]) << 8) + int(headerAsBytes[3])
 	resultRtpHeader.Timestamp =
-		(int32(headerAsBytes[4]) << 24) + (int32(headerAsBytes[5]) << 16) +
-			(int32(headerAsBytes[6]) << 8) + int32(headerAsBytes[7])
+		(int(headerAsBytes[4]) << 24) + (int(headerAsBytes[5]) << 16) +
+			(int(headerAsBytes[6]) << 8) + int(headerAsBytes[7])
 	resultRtpHeader.Ssrc =
-		(int32(headerAsBytes[8]) << 24) + (int32(headerAsBytes[9]) << 16) +
-			(int32(headerAsBytes[10]) << 8) + int32(headerAsBytes[11])
+		(int(headerAsBytes[8]) << 24) + (int(headerAsBytes[9]) << 16) +
+			(int(headerAsBytes[10]) << 8) + int(headerAsBytes[11])
 
 	return resultRtpHeader, nil
 }
