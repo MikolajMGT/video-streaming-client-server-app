@@ -15,12 +15,12 @@ type Packet struct {
 	HighestSeqNum  uint32
 }
 
-func NewPacket(fractionLost float64, cumulativeLost uint32, highestSeqNum uint32) *Packet {
+func NewPacket(fractionLost float64, cumulativeLost int, highestSeqNum int) *Packet {
 	return &Packet{
 		Header:         *NewHeader(),
 		FractionLost:   fractionLost,
-		CumulativeLost: cumulativeLost,
-		HighestSeqNum:  highestSeqNum,
+		CumulativeLost: uint32(cumulativeLost),
+		HighestSeqNum:  uint32(highestSeqNum),
 	}
 }
 

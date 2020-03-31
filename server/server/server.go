@@ -25,6 +25,7 @@ type RtspServer struct {
 	VideoFileName        string
 	SessionId            string
 	SequentialNumber     int
+	componentsStarted    bool
 }
 
 func NewRtspServer(port string) *RtspServer {
@@ -34,9 +35,10 @@ func NewRtspServer(port string) *RtspServer {
 
 	log.Printf("[RTSP] received new connection from %v", clientConnection.RemoteAddr().String())
 	return &RtspServer{
-		ClientConnection: &clientConnection,
-		SessionId:        uuid.New().String(),
-		State:            state.Init,
+		ClientConnection:  &clientConnection,
+		SessionId:         uuid.New().String(),
+		State:             state.Init,
+		componentsStarted: false,
 	}
 }
 
@@ -65,8 +67,10 @@ func (srv *RtspServer) Start() {
 }
 
 func (srv *RtspServer) ShutDown() {
-	srv.CongestionController.Stop()
-	srv.RtpSender.Stop()
+	if srv.componentsStarted {
+		srv.CongestionController.Stop()
+		srv.RtpSender.Stop()
+	}
 }
 
 func (srv *RtspServer) ParseRequest() message.Message {
@@ -110,6 +114,7 @@ func (srv *RtspServer) OnSetup(fileName string, rtpDestinationPort int) {
 	srv.CongestionController.RtpSender = srv.RtpSender
 	srv.CongestionController.Start()
 
+	srv.componentsStarted = true
 	srv.State = state.Ready
 	srv.SendResponse()
 	log.Println("[RTSP] state changed: READY")

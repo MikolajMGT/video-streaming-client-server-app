@@ -8,5 +8,7 @@ Implementation of video streaming client server app using RTSP, RTP and RTC prot
 
 Project created as part of bachelor's thesis. Work in progress.
 
+Documentation and launch instructions will be available after the implementation is complete
+
 ### Author
 > Mikołaj Migut
