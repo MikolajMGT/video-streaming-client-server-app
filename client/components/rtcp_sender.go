@@ -75,5 +75,6 @@ func (sender *RtcpSender) Stop() {
 	if sender.started {
 		sender.doneCheck <- true
 		sender.Ticker.Stop()
+		sender.started = false
 	}
 }

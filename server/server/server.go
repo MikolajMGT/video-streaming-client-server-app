@@ -137,7 +137,7 @@ func (srv *RtspServer) OnPause() {
 func (srv *RtspServer) OnTeardown() {
 	srv.SendResponse()
 	srv.RtpSender.Stop()
-	log.Println("[RTSP] state changed: PLAYING")
+	log.Println("[RTSP] state changed: INIT")
 }
 
 func (srv *RtspServer) OnDescribe() {

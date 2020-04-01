@@ -1,8 +1,14 @@
 package main
 
-import "streming_server/client/ui"
+import (
+	"os"
+	"streming_server/client/client"
+)
 
 func main() {
-	clientView := ui.View{}
-	clientView.InitView()
+	serverAddress := os.Args[1]
+	serverPort := os.Args[2]
+	videoFileName := os.Args[3]
+
+	client.NewRtspClient(serverAddress, serverPort, videoFileName)
 }

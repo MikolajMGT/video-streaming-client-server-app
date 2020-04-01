@@ -2,23 +2,22 @@ package video
 
 import (
 	"gopkg.in/karalabe/cookiejar.v2/collections/deque"
-	"image"
 )
 
-type FrameSynchronizer struct {
+type FrameSync struct {
 	FramesQueue   *deque.Deque
-	LastImage     *image.Image
+	LastImage     []byte
 	CurrentSeqNum int
 }
 
-func NewFrameSynchronizer() *FrameSynchronizer {
-	return &FrameSynchronizer{
-		FramesQueue:   new(deque.Deque),
+func NewFrameSync() *FrameSync {
+	return &FrameSync{
+		FramesQueue:   deque.New(),
 		CurrentSeqNum: 1,
 	}
 }
 
-func (fs *FrameSynchronizer) addFrame(image image.Image, sequentialNumber int) {
+func (fs *FrameSync) AddFrame(image []byte, sequentialNumber int) {
 	if sequentialNumber < fs.CurrentSeqNum {
 		fs.FramesQueue.PushRight(fs.LastImage)
 	} else if sequentialNumber > fs.CurrentSeqNum {
@@ -31,9 +30,9 @@ func (fs *FrameSynchronizer) addFrame(image image.Image, sequentialNumber int) {
 	}
 }
 
-func (fs *FrameSynchronizer) nextFrame() *image.Image {
+func (fs *FrameSync) NextFrame() []byte {
 	fs.CurrentSeqNum++
 	lastInQueue := fs.FramesQueue.Right()
-	fs.LastImage = lastInQueue.(*image.Image)
-	return fs.FramesQueue.PopLeft().(*image.Image)
+	fs.LastImage = lastInQueue.([]byte)
+	return fs.FramesQueue.PopLeft().([]byte)
 }

@@ -3,13 +3,18 @@ package components
 import (
 	"fmt"
 	"net"
+	"streming_server/client/ui"
+	"streming_server/client/video"
 	"streming_server/protocol/rtp"
 	"time"
 )
 
 const DefaultRtpInterval = 20
+const DefaultRtpPort = 25000
 
 type RtpReceiver struct {
+	FrameSync         *video.FrameSync
+	View              *ui.View
 	Ticker            *time.Ticker
 	Interval          time.Duration
 	UdpCon            *net.PacketConn
@@ -19,20 +24,26 @@ type RtpReceiver struct {
 	TotalBytes        int
 	buffer            []byte
 	doneCheck         chan bool
-	startTime         int64
+	StartTime         int64
+	started           bool
 }
 
-func NewRtcpReceiver(serverAddress string, serverPort int) *RtpReceiver {
-	address := fmt.Sprintf("%v:%v", serverAddress, serverPort)
+func NewRtpReceiver(frameSync *video.FrameSync, view *ui.View, serverAddress string,
+) *RtpReceiver {
+
+	address := fmt.Sprintf("%v:%v", serverAddress, DefaultRtpPort)
 	udpConn, _ := net.ListenPacket("udp", address)
 
 	return &RtpReceiver{
+		FrameSync:      frameSync,
+		View:           view,
 		Interval:       DefaultRtpInterval * time.Millisecond,
 		UdpCon:         &udpConn,
 		buffer:         make([]byte, 300_000),
 		doneCheck:      make(chan bool),
 		ExpectedSeqNum: 0,
 		TotalBytes:     0,
+		started:        false,
 		// TODO HighestRecvSeqNum, CumulativeLost initial?
 	}
 }
@@ -40,10 +51,10 @@ func NewRtcpReceiver(serverAddress string, serverPort int) *RtpReceiver {
 func (receiver *RtpReceiver) receive() {
 	packetLength, _, _ := (*receiver.UdpCon).ReadFrom(receiver.buffer)
 
-	// current unix time in milliseconds
+	//current unix time in milliseconds
 	currentTime := time.Now().UnixNano() / int64(time.Millisecond)
-	totalPlayTime := currentTime - receiver.startTime
-	receiver.startTime = currentTime
+	totalPlayTime := currentTime - receiver.StartTime
+	receiver.StartTime = currentTime
 
 	rtpPacket := rtp.NewPacketFromBytes(receiver.buffer, packetLength)
 	rtpPacket.Header.Log()
@@ -56,18 +67,21 @@ func (receiver *RtpReceiver) receive() {
 		receiver.CumulativeLost++
 	}
 
-	dataRate := 0
+	dataRate := 0.0
 	if totalPlayTime != 0 {
-		dataRate = (receiver.TotalBytes) / int(totalPlayTime/1000.0)
+		dataRate = float64(receiver.TotalBytes) / (float64(totalPlayTime) / 1000.0)
 	}
 	fractionLost := receiver.CumulativeLost / receiver.HighestRecvSeqNum
 	receiver.TotalBytes += len(rtpPacket.Payload)
 
-	// TODO show it in GUI
-	fmt.Println(dataRate, fractionLost, receiver.TotalBytes)
+	receiver.View.UpdateStatistics(receiver.TotalBytes, fractionLost, dataRate)
+
+	receiver.FrameSync.AddFrame(rtpPacket.Payload, rtpPacket.Header.SequenceNumber)
+	receiver.View.UpdateImage(receiver.FrameSync.NextFrame())
 }
 
 func (receiver *RtpReceiver) Start() {
+	receiver.started = true
 	receiver.Ticker = time.NewTicker(receiver.Interval)
 
 	go func() {
@@ -83,6 +97,9 @@ func (receiver *RtpReceiver) Start() {
 }
 
 func (receiver *RtpReceiver) Stop() {
-	receiver.doneCheck <- true
-	receiver.Ticker.Stop()
+	if receiver.started {
+		receiver.doneCheck <- true
+		receiver.Ticker.Stop()
+		receiver.started = false
+	}
 }

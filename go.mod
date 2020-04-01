@@ -9,5 +9,5 @@ require (
 	github.com/google/uuid v1.1.1
 	gocv.io/x/gocv v0.22.0
 	golang.org/x/net v0.0.0-20200324143707-d3edc9973b7e // indirect
-	gopkg.in/karalabe/cookiejar.v2 v2.0.0-20150724131613-8dcd6a7f4951 // indirect
+	gopkg.in/karalabe/cookiejar.v2 v2.0.0-20150724131613-8dcd6a7f4951
 )
