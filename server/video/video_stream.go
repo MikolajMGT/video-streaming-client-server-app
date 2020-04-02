@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"gocv.io/x/gocv"
 	"image/jpeg"
+	"streming_server/protocol/rtp"
 )
+
+const UdpMaxPayloadSize = 65535 - rtp.HeaderSize
 
 type Stream struct {
 	VideoCapture *gocv.VideoCapture
@@ -35,10 +38,22 @@ func (stream *Stream) NextFrame(frameBuffer []byte) int {
 		stream.FrameCounter++
 
 		_ = stream.VideoCapture.Read(stream.VideoMat)
-		frame, _ := stream.VideoMat.ToImage()
+		//gocv.Resize(*stream.VideoMat, stream.VideoMat, image.Point{}, 0.5, 0.5, gocv.InterpolationLinear)
 
+		frame, _ := stream.VideoMat.ToImage()
 		buf := new(bytes.Buffer)
 		_ = jpeg.Encode(buf, frame, nil)
+		//length := len(buf.Bytes())
+		//for length > UdpMaxPayloadSize {
+		//	fmt.Println("old:", len(buf.Bytes()))
+		//	gocv.Resize(*stream.VideoMat, stream.VideoMat, image.Point{}, 0.5, 0.5, gocv.InterpolationLinear)
+		//	frame, _ = stream.VideoMat.ToImage()
+		//	buf = new(bytes.Buffer)
+		//	_ = jpeg.Encode(buf, frame, nil)
+		//	length = len(buf.Bytes())
+		//	fmt.Println("new:", length)
+		//}
+
 		copy(frameBuffer, buf.Bytes())
 		return len(buf.Bytes())
 	} else {

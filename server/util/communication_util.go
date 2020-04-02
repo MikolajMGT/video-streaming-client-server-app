@@ -27,6 +27,11 @@ func PrepareDescribeResponse(sequentialNumber int, rtspDestinationPort string, m
 	return fmt.Sprint(FormatHeader(sequentialNumber), content, control)
 }
 
+func PrepareSetupResponse(sequentialNumber int, framePeriod int) string {
+	content := fmt.Sprintf("Frame-Period: %v\r\n", framePeriod)
+	return fmt.Sprint(FormatHeader(sequentialNumber), content)
+}
+
 func ReadRequestElements(bufferedReader *bufio.Reader) []string {
 	request := ""
 	for i := 0; i < 3; i++ {

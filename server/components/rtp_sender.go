@@ -11,6 +11,7 @@ import (
 )
 
 const MjpegType = 26
+const DefaultInterval = 5
 
 type RtpSender struct {
 	RtcpReceiver         *RtcpReceiver
@@ -34,13 +35,13 @@ func NewRtpSender(
 		destinationPort))
 	clientConnection, _ := net.DialUDP("udp", nil, address)
 
-	interval := time.Millisecond * time.Duration(videoStream.FramePeriod)
+	//interval := time.Millisecond * time.Duration(videoStream.FramePeriod)
 
 	result := RtpSender{
 		RtcpReceiver:         rtcpReceiver,
 		CongestionController: congestionController,
 		VideoStream:          videoStream,
-		Interval:             interval,
+		Interval:             time.Duration(DefaultInterval) * time.Millisecond,
 		FrameBuffer:          make([]byte, 300_000),
 		doneCheck:            make(chan bool),
 		started:              false,
@@ -58,7 +59,7 @@ func (sender *RtpSender) sendFrame() {
 		return
 	}
 
-	sender.CongestionController.AdjustCompressionQuality(sender.FrameBuffer, imageLength)
+	//sender.CongestionController.AdjustCompressionQuality(sender.FrameBuffer, imageLength)
 	rtpPacket := rtp.NewPacket(
 		rtp.NewHeader(
 			MjpegType, sender.VideoStream.FrameCounter, sender.VideoStream.FrameCounter*sender.VideoStream.FramePeriod,

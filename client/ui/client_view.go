@@ -8,9 +8,11 @@ import (
 	"fyne.io/fyne/layout"
 	"fyne.io/fyne/widget"
 	"streming_server/client/ui/resources"
+	"streming_server/client/video"
 )
 
 type View struct {
+	FrameSync        *video.FrameSync
 	Window           fyne.Window
 	Image            *canvas.Image
 	ButtonsContainer *fyne.Container
@@ -24,8 +26,11 @@ type View struct {
 	onTeardown func()
 }
 
-func NewView(OnSetup func(), OnPlay func(), OnPause func(), OnDescribe func(), OnTeardown func()) *View {
+func NewView(frameSync *video.FrameSync,
+	OnSetup func(), OnPlay func(), OnPause func(), OnDescribe func(), OnTeardown func(),
+) *View {
 	view := &View{
+		FrameSync:  frameSync,
 		onSetup:    OnSetup,
 		onPlay:     OnPlay,
 		onPause:    OnPause,
@@ -62,9 +67,10 @@ func (view *View) StartGUI() {
 	view.Window.ShowAndRun()
 }
 
-func (view *View) UpdateImage(newImage []byte) {
-	view.Image.Resource = fyne.NewStaticResource("img", newImage)
-	view.Image.FillMode = canvas.ImageFillOriginal
+func (view *View) UpdateImage() {
+	view.Image.Resource = fyne.NewStaticResource("img", view.FrameSync.NextFrame())
+	//view.Image.FillMode = canvas.ImageFillOriginal
+	view.Image.SetMinSize(fyne.NewSize(1280, 720))
 	canvas.Refresh(view.Image)
 }
 

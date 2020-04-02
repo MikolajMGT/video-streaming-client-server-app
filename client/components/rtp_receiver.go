@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-const DefaultRtpInterval = 20
+const DefaultRtpInterval = 10
 const DefaultRtpPort = 25000
 
 type RtpReceiver struct {
@@ -76,13 +76,16 @@ func (receiver *RtpReceiver) receive() {
 
 	receiver.View.UpdateStatistics(receiver.TotalBytes, fractionLost, dataRate)
 
-	receiver.FrameSync.AddFrame(rtpPacket.Payload, rtpPacket.Header.SequenceNumber)
-	receiver.View.UpdateImage(receiver.FrameSync.NextFrame())
+	data := make([]byte, len(rtpPacket.Payload))
+	copy(data, rtpPacket.Payload)
+	receiver.FrameSync.AddFrame(data, rtpPacket.Header.SequenceNumber)
+	//receiver.View.UpdateImage(receiver.FrameSync.NextFrame())
 }
 
 func (receiver *RtpReceiver) Start() {
 	receiver.started = true
 	receiver.Ticker = time.NewTicker(receiver.Interval)
+	receiver.doneCheck = make(chan bool)
 
 	go func() {
 		for {
@@ -98,7 +101,7 @@ func (receiver *RtpReceiver) Start() {
 
 func (receiver *RtpReceiver) Stop() {
 	if receiver.started {
-		receiver.doneCheck <- true
+		close(receiver.doneCheck)
 		receiver.Ticker.Stop()
 		receiver.started = false
 	}

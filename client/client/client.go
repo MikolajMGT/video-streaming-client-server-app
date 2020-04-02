@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strconv"
 	"streming_server/client/components"
 	"streming_server/client/ui"
 	"streming_server/client/video"
@@ -16,6 +17,7 @@ import (
 type RtspClient struct {
 	RtcpSender       *components.RtcpSender
 	RtpReceiver      *components.RtpReceiver
+	ImageRefresh     *components.ImageRefresh
 	FrameSync        *video.FrameSync
 	View             *ui.View
 	ServerConnection net.Conn
@@ -33,18 +35,20 @@ func NewRtspClient(serverAddress string, serverPort string, videoFileName string
 		State:         state.Init,
 	}
 
-	view := ui.NewView(
+	frameSync := video.NewFrameSync()
+	view := ui.NewView(frameSync,
 		rtpClient.onSetup, rtpClient.onPlay, rtpClient.onPause, rtpClient.onDescribe, rtpClient.onTeardown,
 	)
-	frameSync := video.NewFrameSync()
 
 	rtpReceiver := components.NewRtpReceiver(frameSync, view, serverAddress)
 	rtcpSender := components.NewRtcpSender(rtpReceiver, serverAddress)
+	imageRefresh := components.NewImageRefresh(view, frameSync)
 	serverConnection, _ := net.Dial("tcp", fmt.Sprintf("%v:%v", serverAddress, serverPort))
 
 	rtpClient.FrameSync = frameSync
 	rtpClient.RtcpSender = rtcpSender
 	rtpClient.RtpReceiver = rtpReceiver
+	rtpClient.ImageRefresh = imageRefresh
 	rtpClient.View = view
 	rtpClient.ServerConnection = serverConnection
 	log.Println("[RTSP] connected with server.")
@@ -82,6 +86,7 @@ func (rtspClient *RtspClient) onPlay() {
 			rtspClient.State = state.Playing
 			rtspClient.RtpReceiver.Start()
 			rtspClient.RtcpSender.Start()
+			rtspClient.ImageRefresh.Start()
 
 			log.Println("[RTSP] state change to Playing")
 		}
@@ -101,6 +106,7 @@ func (rtspClient *RtspClient) onPause() {
 			rtspClient.State = state.Ready
 			rtspClient.RtpReceiver.Stop()
 			rtspClient.RtcpSender.Stop()
+			rtspClient.ImageRefresh.Stop()
 
 			log.Println("[RTSP] state change to READY")
 		}
@@ -131,6 +137,7 @@ func (rtspClient *RtspClient) onTeardown() {
 
 		rtspClient.RtpReceiver.Stop()
 		rtspClient.RtcpSender.Stop()
+		rtspClient.ImageRefresh.Stop()
 
 		log.Println("[RTSP] new RTSP state INIT")
 	}
@@ -170,9 +177,14 @@ func (rtspClient *RtspClient) parseResponse() string {
 	replyCode := requestElements[1]
 	if replyCode == "200" {
 		thirdLineParam := requestElements[5]
-		if rtspClient.State == state.Init && thirdLineParam == "Session:" {
-			sessionId := requestElements[6]
-			rtspClient.SessionId = sessionId
+		if rtspClient.State == state.Init {
+			if thirdLineParam == "Session:" {
+				sessionId := requestElements[6]
+				rtspClient.SessionId = sessionId
+			} else if thirdLineParam == "Frame-Period:" {
+				framePeriod, _ := strconv.Atoi(requestElements[6])
+				rtspClient.ImageRefresh.Interval = time.Duration(framePeriod) * time.Millisecond
+			}
 		}
 	} else {
 		log.Printf("Server returned response with error code %v", replyCode)

@@ -45,6 +45,7 @@ func NewRtspServer(port string) *RtspServer {
 func (srv *RtspServer) SendResponse() {
 	response := fmt.Sprintf("%vSession: %v\r\n", util.FormatHeader(srv.SequentialNumber), srv.SessionId)
 	_, _ = (*srv.ClientConnection).Write([]byte(response))
+
 }
 
 func (srv *RtspServer) Start() {
@@ -68,7 +69,7 @@ func (srv *RtspServer) Start() {
 
 func (srv *RtspServer) ShutDown() {
 	if srv.componentsStarted {
-		srv.CongestionController.Stop()
+		//srv.CongestionController.Stop()
 		srv.RtpSender.Stop()
 	}
 }
@@ -112,11 +113,15 @@ func (srv *RtspServer) OnSetup(fileName string, rtpDestinationPort int) {
 		srv.CongestionController, rtcpReceiver, videoStream)
 
 	srv.CongestionController.RtpSender = srv.RtpSender
-	srv.CongestionController.Start()
+	//srv.CongestionController.Start()
 
 	srv.componentsStarted = true
 	srv.State = state.Ready
-	srv.SendResponse()
+
+	_, _ = (*srv.ClientConnection).Write([]byte(util.PrepareSetupResponse(
+		srv.SequentialNumber, srv.RtpSender.VideoStream.FramePeriod),
+	))
+
 	log.Println("[RTSP] state changed: READY")
 }
 
