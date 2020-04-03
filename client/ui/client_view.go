@@ -68,10 +68,12 @@ func (view *View) StartGUI() {
 }
 
 func (view *View) UpdateImage() {
-	view.Image.Resource = fyne.NewStaticResource("img", view.FrameSync.NextFrame())
-	//view.Image.FillMode = canvas.ImageFillOriginal
-	view.Image.SetMinSize(fyne.NewSize(1280, 720))
-	canvas.Refresh(view.Image)
+	if !view.FrameSync.Empty() {
+		view.Image.Resource = fyne.NewStaticResource("img", view.FrameSync.NextFrame())
+		//view.Image.FillMode = canvas.ImageFillOriginal
+		//view.Image.SetMinSize(fyne.NewSize(1280, 720))
+		canvas.Refresh(view.Image)
+	}
 }
 
 func (view *View) UpdateStatistics(totalBytesReceived int, packageLost int, dataRate float64) {
@@ -95,6 +97,7 @@ func resolveIcon(name string) fyne.Resource {
 func prepareImage() *canvas.Image {
 	imageFrame := canvas.NewImageFromFile("")
 	imageFrame.FillMode = canvas.ImageFillContain
+	imageFrame.SetMinSize(fyne.NewSize(1280, 720))
 	return imageFrame
 }
 

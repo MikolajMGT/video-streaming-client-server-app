@@ -1,44 +1,41 @@
 package video
 
-import (
-	"gopkg.in/karalabe/cookiejar.v2/collections/deque"
-)
-
 type FrameSync struct {
-	FramesQueue   *deque.Deque
-	LastImage     []byte
+	FramesMap     map[int][]byte
 	CurrentSeqNum int
+	LastSeqNum    int
 }
 
 func NewFrameSync() *FrameSync {
 	return &FrameSync{
-		FramesQueue:   deque.New(),
+		FramesMap:     make(map[int][]byte, 0),
 		CurrentSeqNum: 1,
+		LastSeqNum:    0,
 	}
 }
 
 func (fs *FrameSync) AddFrame(image []byte, sequentialNumber int) {
-	fs.FramesQueue.PushRight(image)
-
-	//if sequentialNumber < fs.CurrentSeqNum {
-	//	fs.FramesQueue.PushRight(fs.LastImage)
-	//} else if sequentialNumber > fs.CurrentSeqNum {
-	//	for i := fs.CurrentSeqNum; i < sequentialNumber; i++ {
-	//		fs.FramesQueue.PushRight(fs.LastImage)
-	//	}
-	//	fs.FramesQueue.PushRight(image)
-	//} else {
-	//	fs.FramesQueue.PushRight(image)
-	//}
+	if sequentialNumber > fs.CurrentSeqNum {
+		fs.FramesMap[sequentialNumber] = image
+	}
 }
 
 func (fs *FrameSync) NextFrame() []byte {
+	if fs.LastSeqNum > 0 {
+		delete(fs.FramesMap, fs.LastSeqNum)
+	}
+
+	img := fs.FramesMap[fs.CurrentSeqNum]
+	for img == nil {
+		fs.CurrentSeqNum++
+		img = fs.FramesMap[fs.CurrentSeqNum]
+	}
+	fs.LastSeqNum = fs.CurrentSeqNum
 	fs.CurrentSeqNum++
-	//lastInQueue := fs.FramesQueue.Right()
-	//fs.LastImage = lastInQueue.([]byte)
-	return fs.FramesQueue.PopLeft().([]byte)
+
+	return img
 }
 
 func (fs *FrameSync) Empty() bool {
-	return fs.FramesQueue.Empty()
+	return len(fs.FramesMap) == 0
 }
