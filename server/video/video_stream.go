@@ -38,7 +38,7 @@ func (stream *Stream) NextFrame(frameBuffer []byte) int {
 		stream.FrameCounter++
 
 		_ = stream.VideoCapture.Read(stream.VideoMat)
-		//gocv.Resize(*stream.VideoMat, stream.VideoMat, image.Point{}, 0.5, 0.5, gocv.InterpolationLinear)
+		//gocv.Resize(*stream.VideoMat, stream.VideoMat, image.Point{}, 0.8, 0.8, gocv.InterpolationLinear)
 
 		frame, _ := stream.VideoMat.ToImage()
 		buf := new(bytes.Buffer)

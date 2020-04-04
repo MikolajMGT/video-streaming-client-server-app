@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const DefaultCongestionInterval = 600
+const DefaultCongestionInterval = 400
 
 type CongestionController struct {
 	Ticker              *time.Ticker

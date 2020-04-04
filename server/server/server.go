@@ -69,7 +69,7 @@ func (srv *RtspServer) Start() {
 
 func (srv *RtspServer) ShutDown() {
 	if srv.componentsStarted {
-		//srv.CongestionController.Stop()
+		srv.CongestionController.Stop()
 		srv.RtpSender.Stop()
 	}
 }
@@ -113,7 +113,7 @@ func (srv *RtspServer) OnSetup(fileName string, rtpDestinationPort int) {
 		srv.CongestionController, rtcpReceiver, videoStream)
 
 	srv.CongestionController.RtpSender = srv.RtpSender
-	//srv.CongestionController.Start()
+	srv.CongestionController.Start()
 
 	srv.componentsStarted = true
 	srv.State = state.Ready

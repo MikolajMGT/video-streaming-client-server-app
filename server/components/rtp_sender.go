@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"streming_server/protocol/large_udp"
 	"streming_server/protocol/rtp"
 	"streming_server/server/video"
 	"strings"
@@ -11,14 +12,14 @@ import (
 )
 
 const MjpegType = 26
-const DefaultInterval = 5
+const DefaultInterval = 1
 
 type RtpSender struct {
 	RtcpReceiver         *RtcpReceiver
 	CongestionController *CongestionController
 	VideoStream          *video.Stream
 	Ticker               *time.Ticker
-	ClientConnection     *net.UDPConn
+	ClientConnection     *large_udp.LargeUdpConn
 	Interval             time.Duration
 	FrameBuffer          []byte
 	doneCheck            chan bool
@@ -34,6 +35,7 @@ func NewRtpSender(
 	address, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%v:%v", addressAndPort[0],
 		destinationPort))
 	clientConnection, _ := net.DialUDP("udp", nil, address)
+	largeUdpConn := large_udp.NewLargeUdpConnWithSize(clientConnection, 64_000)
 
 	//interval := time.Millisecond * time.Duration(videoStream.FramePeriod)
 
@@ -41,11 +43,11 @@ func NewRtpSender(
 		RtcpReceiver:         rtcpReceiver,
 		CongestionController: congestionController,
 		VideoStream:          videoStream,
-		Interval:             time.Duration(DefaultInterval) * time.Millisecond,
+		Interval:             time.Duration(DefaultInterval) * time.Microsecond,
 		FrameBuffer:          make([]byte, 300_000),
 		doneCheck:            make(chan bool),
 		started:              false,
-		ClientConnection:     clientConnection,
+		ClientConnection:     largeUdpConn,
 	}
 
 	return &result

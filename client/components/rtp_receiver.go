@@ -5,11 +5,12 @@ import (
 	"net"
 	"streming_server/client/ui"
 	"streming_server/client/video"
+	"streming_server/protocol/large_udp"
 	"streming_server/protocol/rtp"
 	"time"
 )
 
-const DefaultRtpInterval = 10
+const DefaultRtpInterval = 1
 const DefaultRtpPort = 25000
 
 type RtpReceiver struct {
@@ -17,7 +18,7 @@ type RtpReceiver struct {
 	View              *ui.View
 	Ticker            *time.Ticker
 	Interval          time.Duration
-	UdpCon            *net.PacketConn
+	UdpCon            *large_udp.LargeUdpPack
 	HighestRecvSeqNum int
 	CumulativeLost    int
 	ExpectedSeqNum    int
@@ -33,12 +34,13 @@ func NewRtpReceiver(frameSync *video.FrameSync, view *ui.View, serverAddress str
 
 	address := fmt.Sprintf("%v:%v", serverAddress, DefaultRtpPort)
 	udpConn, _ := net.ListenPacket("udp", address)
+	largeUdpCon := large_udp.NewLargeUdpPackWithSize(udpConn, 64_000)
 
 	return &RtpReceiver{
 		FrameSync:      frameSync,
 		View:           view,
-		Interval:       DefaultRtpInterval * time.Millisecond,
-		UdpCon:         &udpConn,
+		Interval:       DefaultRtpInterval * time.Microsecond,
+		UdpCon:         largeUdpCon,
 		buffer:         make([]byte, 300_000),
 		doneCheck:      make(chan bool),
 		ExpectedSeqNum: 0,
@@ -49,7 +51,11 @@ func NewRtpReceiver(frameSync *video.FrameSync, view *ui.View, serverAddress str
 }
 
 func (receiver *RtpReceiver) receive() {
-	packetLength, _, _ := (*receiver.UdpCon).ReadFrom(receiver.buffer)
+	packetLength, full, _ := receiver.UdpCon.ReadFrom(receiver.buffer)
+
+	if !full {
+		return
+	}
 
 	//current unix time in milliseconds
 	currentTime := time.Now().UnixNano() / int64(time.Millisecond)
