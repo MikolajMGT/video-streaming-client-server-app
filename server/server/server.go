@@ -20,7 +20,7 @@ import (
 type RtspServer struct {
 	RtpSender            *components.RtpSender
 	CongestionController *components.CongestionController
-	ClientConnection     *net.Conn
+	ClientConnection     net.Conn
 	State                state.State
 	VideoFileName        string
 	SessionId            string
@@ -28,14 +28,9 @@ type RtspServer struct {
 	componentsStarted    bool
 }
 
-func NewRtspServer(port string) *RtspServer {
-	log.Println("[RTSP] Server started")
-	listener, _ := net.Listen("tcp", fmt.Sprint(":", port))
-	clientConnection, _ := listener.Accept()
-
-	log.Printf("[RTSP] received new connection from %v", clientConnection.RemoteAddr().String())
+func NewRtspServer(clientConnection net.Conn) *RtspServer {
 	return &RtspServer{
-		ClientConnection:  &clientConnection,
+		ClientConnection:  clientConnection,
 		SessionId:         uuid.New().String(),
 		State:             state.Init,
 		componentsStarted: false,
@@ -44,7 +39,7 @@ func NewRtspServer(port string) *RtspServer {
 
 func (srv *RtspServer) SendResponse() {
 	response := fmt.Sprintf("%vSession: %v\r\n", util.FormatHeader(srv.SequentialNumber), srv.SessionId)
-	_, _ = (*srv.ClientConnection).Write([]byte(response))
+	_, _ = srv.ClientConnection.Write([]byte(response))
 
 }
 
@@ -75,7 +70,7 @@ func (srv *RtspServer) ShutDown() {
 }
 
 func (srv *RtspServer) ParseRequest() message.Message {
-	bufferedReader := bufio.NewReader(*srv.ClientConnection)
+	bufferedReader := bufio.NewReader(srv.ClientConnection)
 	requestElements := util.ReadRequestElements(bufferedReader)
 	if len(requestElements) == 0 {
 		return message.Exit
@@ -107,9 +102,9 @@ func (srv *RtspServer) ParseRequest() message.Message {
 
 func (srv *RtspServer) OnSetup(fileName string, rtpDestinationPort int) {
 	videoStream := video.NewStream(fileName)
-	rtcpReceiver := components.NewRtcpReceiver((*srv.ClientConnection).RemoteAddr())
+	rtcpReceiver := components.NewRtcpReceiver(srv.ClientConnection.RemoteAddr())
 	srv.CongestionController = components.NewCongestionController(rtcpReceiver, videoStream)
-	srv.RtpSender = components.NewRtpSender((*srv.ClientConnection).RemoteAddr(), rtpDestinationPort,
+	srv.RtpSender = components.NewRtpSender(srv.ClientConnection.RemoteAddr(), rtpDestinationPort,
 		srv.CongestionController, rtcpReceiver, videoStream)
 
 	srv.CongestionController.RtpSender = srv.RtpSender
@@ -118,8 +113,8 @@ func (srv *RtspServer) OnSetup(fileName string, rtpDestinationPort int) {
 	srv.componentsStarted = true
 	srv.State = state.Ready
 
-	_, _ = (*srv.ClientConnection).Write([]byte(util.PrepareSetupResponse(
-		srv.SequentialNumber, srv.RtpSender.VideoStream.FramePeriod),
+	_, _ = srv.ClientConnection.Write([]byte(util.PrepareSetupResponse(
+		srv.SequentialNumber, srv.RtpSender.VideoStream.FramePeriod, rtcpReceiver.ServerAddress),
 	))
 
 	log.Println("[RTSP] state changed: READY")
@@ -146,7 +141,7 @@ func (srv *RtspServer) OnTeardown() {
 }
 
 func (srv *RtspServer) OnDescribe() {
-	_, _ = (*srv.ClientConnection).Write([]byte(util.PrepareDescribeResponse(
+	_, _ = srv.ClientConnection.Write([]byte(util.PrepareDescribeResponse(
 		srv.SequentialNumber, os.Args[1], components.MjpegType, srv.SessionId, srv.VideoFileName),
 	))
 }

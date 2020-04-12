@@ -40,8 +40,8 @@ func NewRtspClient(serverAddress string, serverPort string, videoFileName string
 		rtpClient.onSetup, rtpClient.onPlay, rtpClient.onPause, rtpClient.onDescribe, rtpClient.onTeardown,
 	)
 
-	rtpReceiver := components.NewRtpReceiver(frameSync, view, serverAddress)
-	rtcpSender := components.NewRtcpSender(rtpReceiver, serverAddress)
+	rtpReceiver := components.NewRtpReceiver(frameSync, view)
+	rtcpSender := components.NewRtcpSender(rtpReceiver)
 	imageRefresh := components.NewImageRefresh(view, frameSync)
 	serverConnection, _ := net.Dial("tcp", fmt.Sprintf("%v:%v", serverAddress, serverPort))
 
@@ -148,7 +148,7 @@ func (rtspClient *RtspClient) sendRequest(requestType message.Message) {
 		requestType, rtspClient.VideoFileName, rtspClient.SequentialNumber)
 
 	if requestType == message.Setup {
-		request += fmt.Sprintf("Transport: RTP/UDP; client_port= %v\r\n", components.DefaultRtpPort)
+		request += fmt.Sprintf("Transport: RTP/UDP; client_port= %v\r\n", rtspClient.RtpReceiver.ListeningPort)
 	} else if requestType == message.Describe {
 		request += fmt.Sprintf("Accept: application/sdp\r\n")
 	} else {
@@ -184,6 +184,8 @@ func (rtspClient *RtspClient) parseResponse() string {
 			} else if thirdLineParam == "Frame-Period:" {
 				framePeriod, _ := strconv.Atoi(requestElements[6])
 				rtspClient.ImageRefresh.Interval = time.Duration(framePeriod) * time.Millisecond
+				//rtspClient.ImageRefresh.Interval = 33 * time.Millisecond
+				rtspClient.RtcpSender.InitConnection(requestElements[8])
 			}
 		}
 	} else {

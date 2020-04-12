@@ -7,11 +7,12 @@ import (
 	"streming_server/client/video"
 	"streming_server/protocol/large_udp"
 	"streming_server/protocol/rtp"
+	"strings"
 	"time"
 )
 
 const DefaultRtpInterval = 1
-const DefaultRtpPort = 25000
+const DefaultRtpPort = 25002
 
 type RtpReceiver struct {
 	FrameSync         *video.FrameSync
@@ -27,13 +28,16 @@ type RtpReceiver struct {
 	doneCheck         chan bool
 	StartTime         int64
 	started           bool
+	ListeningPort     string
 }
 
-func NewRtpReceiver(frameSync *video.FrameSync, view *ui.View, serverAddress string,
-) *RtpReceiver {
+func NewRtpReceiver(frameSync *video.FrameSync, view *ui.View) *RtpReceiver {
 
-	address := fmt.Sprintf("%v:%v", serverAddress, DefaultRtpPort)
-	udpConn, _ := net.ListenPacket("udp", address)
+	udpConn, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		fmt.Println(err)
+	}
+	listeningPort := strings.Split(udpConn.LocalAddr().String(), ":")[1]
 	largeUdpCon := large_udp.NewLargeUdpPackWithSize(udpConn, 64_000)
 
 	return &RtpReceiver{
@@ -46,6 +50,7 @@ func NewRtpReceiver(frameSync *video.FrameSync, view *ui.View, serverAddress str
 		ExpectedSeqNum: 0,
 		TotalBytes:     0,
 		started:        false,
+		ListeningPort:  listeningPort,
 		// TODO HighestRecvSeqNum, CumulativeLost initial?
 	}
 }

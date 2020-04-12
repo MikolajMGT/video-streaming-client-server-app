@@ -27,8 +27,8 @@ func PrepareDescribeResponse(sequentialNumber int, rtspDestinationPort string, m
 	return fmt.Sprint(FormatHeader(sequentialNumber), content, control)
 }
 
-func PrepareSetupResponse(sequentialNumber int, framePeriod int) string {
-	content := fmt.Sprintf("Frame-Period: %v\r\n", framePeriod)
+func PrepareSetupResponse(sequentialNumber int, framePeriod int, serverAddress string) string {
+	content := fmt.Sprintf("Frame-Period: %v\r\nServer-Address: %v\r\n", framePeriod, serverAddress)
 	return fmt.Sprint(FormatHeader(sequentialNumber), content)
 }
 

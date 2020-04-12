@@ -1,7 +1,6 @@
 package components
 
 import (
-	"fmt"
 	"log"
 	"net"
 	"streming_server/protocol/rtcp"
@@ -22,21 +21,23 @@ type RtcpSender struct {
 	started            bool
 }
 
-func NewRtcpSender(rtpReceiver *RtpReceiver, serverAddress string) *RtcpSender {
-	address, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%v:%v", serverAddress,
-		DefaultRtcpPort))
-	senderConnection, _ := net.DialUDP("udp", nil, address)
+func NewRtcpSender(rtpReceiver *RtpReceiver) *RtcpSender {
 	interval := time.Millisecond * time.Duration(DefaultRtcpInterval)
 
 	result := RtcpSender{
-		RtpReceiver:      rtpReceiver,
-		Interval:         interval,
-		doneCheck:        make(chan bool),
-		started:          false,
-		ServerConnection: senderConnection,
+		RtpReceiver: rtpReceiver,
+		Interval:    interval,
+		doneCheck:   make(chan bool),
+		started:     false,
 	}
 
 	return &result
+}
+
+func (sender *RtcpSender) InitConnection(serverAddress string) {
+	address, _ := net.ResolveUDPAddr("udp", serverAddress)
+	senderConnection, _ := net.DialUDP("udp", nil, address)
+	sender.ServerConnection = senderConnection
 }
 
 func (sender *RtcpSender) sendFeedback() {

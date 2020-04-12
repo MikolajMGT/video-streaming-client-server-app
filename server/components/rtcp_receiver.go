@@ -19,12 +19,14 @@ type RtcpReceiver struct {
 	CongestionLevel int
 	buffer          []byte
 	doneCheck       chan bool
+	ServerAddress   string
 }
 
 func NewRtcpReceiver(clientAddress net.Addr) *RtcpReceiver {
 	addressAndPort := strings.Split(clientAddress.String(), ":")
-	address := fmt.Sprintf("%v:%v", addressAndPort[0], Port)
+	address := fmt.Sprintf("%v:%v", addressAndPort[0], 0)
 	udpConn, _ := net.ListenPacket("udp", address)
+	serverAddress := udpConn.LocalAddr().String()
 
 	return &RtcpReceiver{
 		Interval:        DefaultRtcpInterval * time.Millisecond,
@@ -32,6 +34,7 @@ func NewRtcpReceiver(clientAddress net.Addr) *RtcpReceiver {
 		buffer:          make([]byte, 24),
 		doneCheck:       make(chan bool),
 		CongestionLevel: util.NoCongestion,
+		ServerAddress:   serverAddress,
 	}
 }
 
