@@ -7,8 +7,8 @@ import (
 	"fyne.io/fyne/canvas"
 	"fyne.io/fyne/layout"
 	"fyne.io/fyne/widget"
-	"streming_server/client/ui/resources"
-	"streming_server/client/video"
+	"streming_server/ui/resources"
+	"streming_server/video"
 )
 
 type View struct {
@@ -20,6 +20,7 @@ type View struct {
 
 	// methods to call on specific button click
 	onSetup    func()
+	onRecord   func()
 	onPlay     func()
 	onPause    func()
 	onDescribe func()
@@ -27,11 +28,12 @@ type View struct {
 }
 
 func NewView(frameSync *video.FrameSync,
-	OnSetup func(), OnPlay func(), OnPause func(), OnDescribe func(), OnTeardown func(),
+	OnSetup func(), OnRecord func(), OnPlay func(), OnPause func(), OnDescribe func(), OnTeardown func(),
 ) *View {
 	view := &View{
 		FrameSync:  frameSync,
 		onSetup:    OnSetup,
+		onRecord:   OnRecord,
 		onPlay:     OnPlay,
 		onPause:    OnPause,
 		onDescribe: OnDescribe,
@@ -69,9 +71,7 @@ func (view *View) StartGUI() {
 
 func (view *View) UpdateImage() {
 	if !view.FrameSync.Empty() {
-		view.Image.Resource = fyne.NewStaticResource("img", view.FrameSync.NextFrame())
-		//view.Image.FillMode = canvas.ImageFillOriginal
-		//view.Image.SetMinSize(fyne.NewSize(1280, 720))
+		view.Image.Resource = fyne.NewStaticResource("stream.jpeg", view.FrameSync.NextFrame())
 		canvas.Refresh(view.Image)
 	}
 }
@@ -90,7 +90,7 @@ func (view *View) UpdateStatistics(totalBytesReceived int, packageLost int, data
 }
 
 func resolveIcon(name string) fyne.Resource {
-	icon, _ := fyne.LoadResourceFromPath(fmt.Sprintf("client/ui/resources/icons/%v-icon.png", name))
+	icon, _ := fyne.LoadResourceFromPath(fmt.Sprintf("ui/resources/icons/%v-icon.png", name))
 	return icon
 }
 
@@ -104,6 +104,7 @@ func prepareImage() *canvas.Image {
 func (view *View) prepareButtonsContainer() *fyne.Container {
 	buttons := []*widget.Button{
 		widget.NewButtonWithIcon("Setup", resolveIcon("setup"), view.onSetup),
+		widget.NewButtonWithIcon("Record", resolveIcon("cast"), view.onRecord),
 		widget.NewButtonWithIcon("Play", resolveIcon("play"), view.onPlay),
 		widget.NewButtonWithIcon("Pause", resolveIcon("pause"), view.onPause),
 		widget.NewButtonWithIcon("Describe", resolveIcon("describe"), view.onDescribe),

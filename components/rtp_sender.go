@@ -6,18 +6,18 @@ import (
 	"net"
 	"streming_server/protocol/large_udp"
 	"streming_server/protocol/rtp"
-	"streming_server/server/video"
+	"streming_server/video"
 	"strings"
 	"time"
 )
 
 const MjpegType = 26
-const DefaultInterval = 1
+const DefaultInterval = 10
 
 type RtpSender struct {
 	RtcpReceiver         *RtcpReceiver
 	CongestionController *CongestionController
-	VideoStream          *video.Stream
+	FrameSync            *video.FrameSync
 	Ticker               *time.Ticker
 	ClientConnection     *large_udp.LargeUdpConn
 	Interval             time.Duration
@@ -28,23 +28,23 @@ type RtpSender struct {
 
 func NewRtpSender(
 	clientAddress net.Addr, destinationPort int, congestionController *CongestionController,
-	rtcpReceiver *RtcpReceiver, videoStream *video.Stream,
+	rtcpReceiver *RtcpReceiver, frameSync *video.FrameSync,
 ) *RtpSender {
 
 	addressAndPort := strings.Split(clientAddress.String(), ":")
 	address, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%v:%v", addressAndPort[0],
 		destinationPort))
 	clientConnection, _ := net.DialUDP("udp", nil, address)
-	largeUdpConn := large_udp.NewLargeUdpConnWithSize(clientConnection, 64_000)
+	largeUdpConn := large_udp.NewLargeUdpConnWithSize(clientConnection, 64000)
 
 	//interval := time.Millisecond * time.Duration(videoStream.FramePeriod)
 
 	result := RtpSender{
 		RtcpReceiver:         rtcpReceiver,
 		CongestionController: congestionController,
-		VideoStream:          videoStream,
-		Interval:             time.Duration(DefaultInterval) * time.Microsecond,
-		FrameBuffer:          make([]byte, 300_000),
+		FrameSync:            frameSync,
+		Interval:             time.Duration(DefaultInterval) * time.Millisecond,
+		FrameBuffer:          make([]byte, 300000),
 		doneCheck:            make(chan bool),
 		started:              false,
 		ClientConnection:     largeUdpConn,
@@ -53,10 +53,14 @@ func NewRtpSender(
 	return &result
 }
 
-func (sender *RtpSender) sendFrame() {
-	imageLength := sender.VideoStream.NextFrame(sender.FrameBuffer)
+func (sender *RtpSender) SendFrame() {
 
-	if imageLength == 0 {
+	if sender.FrameSync.Empty() {
+		return
+	}
+	data := sender.FrameSync.NextFrame()
+
+	if len(data) == 0 {
 		sender.Stop()
 		return
 	}
@@ -64,13 +68,12 @@ func (sender *RtpSender) sendFrame() {
 	//sender.CongestionController.AdjustCompressionQuality(sender.FrameBuffer, imageLength)
 	rtpPacket := rtp.NewPacket(
 		rtp.NewHeader(
-			MjpegType, sender.VideoStream.FrameCounter, sender.VideoStream.FrameCounter*sender.VideoStream.FramePeriod,
+			MjpegType, sender.FrameSync.CurrentSeqNum, sender.FrameSync.CurrentSeqNum*sender.FrameSync.FramePeriod,
 		),
-		imageLength, sender.FrameBuffer[0:imageLength],
+		len(data), data,
 	)
 	_, _ = sender.ClientConnection.Write(rtpPacket.TransformToBytes())
-
-	log.Printf("Sent frame no. %v with size %v", sender.VideoStream.FrameCounter, imageLength)
+	log.Printf("Sent frame no. %v with size %v", sender.FrameSync.CurrentSeqNum, len(data))
 	rtpPacket.Header.Log()
 }
 
@@ -85,7 +88,7 @@ func (sender *RtpSender) Start() {
 			case <-sender.doneCheck:
 				return
 			case <-sender.Ticker.C:
-				sender.sendFrame()
+				sender.SendFrame()
 			}
 		}
 	}()

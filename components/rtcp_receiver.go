@@ -4,13 +4,10 @@ import (
 	"fmt"
 	"net"
 	"streming_server/protocol/rtcp"
-	"streming_server/server/util"
+	"streming_server/util"
 	"strings"
 	"time"
 )
-
-const DefaultRtcpInterval = 400
-const Port = "19001"
 
 type RtcpReceiver struct {
 	Ticker          *time.Ticker

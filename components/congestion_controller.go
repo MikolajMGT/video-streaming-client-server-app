@@ -3,28 +3,29 @@ package components
 import (
 	"image/jpeg"
 	"log"
-	"streming_server/server/util"
-	"streming_server/server/video"
+	"streming_server/util"
+	"streming_server/video"
 	"time"
 )
 
 const DefaultCongestionInterval = 400
 
+// TODO adjust to client streaming mechanism (temporarily disabled due to lack of compatibility)
 type CongestionController struct {
 	Ticker              *time.Ticker
 	RtpSender           *RtpSender
 	rtcpReceiver        *RtcpReceiver
-	VideoStream         *video.Stream
+	FrameSync           *video.FrameSync
 	QualityAdjuster     *video.QualityAdjuster
 	Interval            time.Duration
 	doneCheck           chan bool
 	prevCongestionLevel int
 }
 
-func NewCongestionController(rtcpReceiver *RtcpReceiver, videoStream *video.Stream) *CongestionController {
+func NewCongestionController(rtcpReceiver *RtcpReceiver, frameSync *video.FrameSync) *CongestionController {
 	return &CongestionController{
 		rtcpReceiver:        rtcpReceiver,
-		VideoStream:         videoStream,
+		FrameSync:           frameSync,
 		QualityAdjuster:     video.NewQualityAdjuster(),
 		Interval:            DefaultCongestionInterval * time.Millisecond,
 		doneCheck:           make(chan bool),
@@ -34,8 +35,8 @@ func NewCongestionController(rtcpReceiver *RtcpReceiver, videoStream *video.Stre
 
 func (con *CongestionController) adjustSendRate() {
 	if con.prevCongestionLevel != con.rtcpReceiver.CongestionLevel {
-		sendDelay := con.VideoStream.FramePeriod +
-			con.rtcpReceiver.CongestionLevel*int(float64(con.VideoStream.FramePeriod)*0.1)
+		sendDelay := con.FrameSync.FramePeriod +
+			con.rtcpReceiver.CongestionLevel*int(float64(con.FrameSync.FramePeriod)*0.1)
 		con.RtpSender.UpdateInterval(time.Duration(sendDelay) * time.Millisecond)
 		con.prevCongestionLevel = con.rtcpReceiver.CongestionLevel
 		log.Println("[congestion] send delay has been changed to ", sendDelay)

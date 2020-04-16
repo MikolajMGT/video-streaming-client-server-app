@@ -8,7 +8,6 @@ import (
 )
 
 const DefaultRtcpInterval = 400
-const DefaultRtcpPort = 19001
 
 type RtcpSender struct {
 	RtpReceiver        *RtpReceiver

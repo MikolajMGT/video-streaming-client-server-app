@@ -1,4 +1,4 @@
-package server
+package components
 
 import (
 	"bufio"
@@ -8,32 +8,52 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"streming_server/protocol/rtp"
 	"streming_server/protocol/rtsp/message"
 	"streming_server/protocol/rtsp/state"
-	"streming_server/server/components"
-	"streming_server/server/util"
-	"streming_server/server/video"
+	"streming_server/util"
+	"streming_server/video"
 )
 
-// TODO error handling
-
 type RtspServer struct {
-	RtpSender            *components.RtpSender
-	CongestionController *components.CongestionController
+	RecvClient           *RtspClient
+	RtpSender            *RtpSender
+	CongestionController *CongestionController
+	FrameLoader          *FrameLoader
+	FrameSync            *video.FrameSync
 	ClientConnection     net.Conn
 	State                state.State
 	VideoFileName        string
 	SessionId            string
 	SequentialNumber     int
 	componentsStarted    bool
+	MainChannel          chan *rtp.Packet
+	PrivateChannel       chan *rtp.Packet
+	IsStreaming          bool
 }
 
-func NewRtspServer(clientConnection net.Conn) *RtspServer {
+func NewRtspServer(clientConnection net.Conn, mainChannel chan *rtp.Packet, privateChannel chan *rtp.Packet) *RtspServer {
 	return &RtspServer{
 		ClientConnection:  clientConnection,
 		SessionId:         uuid.New().String(),
 		State:             state.Init,
 		componentsStarted: false,
+		MainChannel:       mainChannel,
+		PrivateChannel:    privateChannel,
+		IsStreaming:       true,
+	}
+}
+
+func NewSingleConnRtpServer() *RtspServer {
+	log.Println("[RTSP] Server started")
+	listener, _ := net.Listen("tcp", fmt.Sprint(":", 26000))
+	clientConnection, _ := listener.Accept()
+	return &RtspServer{
+		ClientConnection:  clientConnection,
+		SessionId:         uuid.New().String(),
+		State:             state.Init,
+		componentsStarted: false,
+		IsStreaming:       false,
 	}
 }
 
@@ -64,7 +84,7 @@ func (srv *RtspServer) Start() {
 
 func (srv *RtspServer) ShutDown() {
 	if srv.componentsStarted {
-		srv.CongestionController.Stop()
+		//srv.CongestionController.Stop()
 		srv.RtpSender.Stop()
 	}
 }
@@ -85,8 +105,9 @@ func (srv *RtspServer) ParseRequest() message.Message {
 		fileName := requestElements[1]
 		rtpDestinationPort, _ := strconv.Atoi(requestElements[8])
 		srv.VideoFileName = fileName
-		srv.OnSetup(fileName, rtpDestinationPort)
-
+		srv.OnSetup(rtpDestinationPort)
+	} else if requestType == message.Record && srv.State == state.Ready {
+		srv.onRecord()
 	} else if requestType == message.Play && srv.State == state.Ready {
 		srv.onPlay()
 	} else if requestType == message.Pause && srv.State == state.Playing {
@@ -100,28 +121,44 @@ func (srv *RtspServer) ParseRequest() message.Message {
 	return message.Message(requestType)
 }
 
-func (srv *RtspServer) OnSetup(fileName string, rtpDestinationPort int) {
-	videoStream := video.NewStream(fileName)
-	rtcpReceiver := components.NewRtcpReceiver(srv.ClientConnection.RemoteAddr())
-	srv.CongestionController = components.NewCongestionController(rtcpReceiver, videoStream)
-	srv.RtpSender = components.NewRtpSender(srv.ClientConnection.RemoteAddr(), rtpDestinationPort,
-		srv.CongestionController, rtcpReceiver, videoStream)
+func (srv *RtspServer) OnSetup(rtpDestinationPort int) {
+	srv.FrameSync = video.NewFrameSync()
+	srv.FrameLoader = NewFrameLoader(srv.FrameSync, srv.PrivateChannel)
+	rtcpReceiver := NewRtcpReceiver(srv.ClientConnection.RemoteAddr())
+	srv.CongestionController = NewCongestionController(rtcpReceiver, srv.FrameSync)
+	srv.RtpSender = NewRtpSender(srv.ClientConnection.RemoteAddr(), rtpDestinationPort,
+		srv.CongestionController, rtcpReceiver, srv.FrameSync)
 
 	srv.CongestionController.RtpSender = srv.RtpSender
-	srv.CongestionController.Start()
+	//srv.CongestionController.Start()
 
 	srv.componentsStarted = true
 	srv.State = state.Ready
 
 	_, _ = srv.ClientConnection.Write([]byte(util.PrepareSetupResponse(
-		srv.SequentialNumber, srv.RtpSender.VideoStream.FramePeriod, rtcpReceiver.ServerAddress),
+		srv.SequentialNumber, srv.RtpSender.FrameSync.FramePeriod, rtcpReceiver.ServerAddress),
 	))
 
 	log.Println("[RTSP] state changed: READY")
 }
 
+func (srv *RtspServer) onRecord() {
+	srv.RecvClient = NewRtspClientWithoutGui(srv, "127.0.0.1", "26000", "dummy")
+	srv.IsStreaming = false
+
+	srv.RecvClient.onSetup()
+	srv.RecvClient.onPlay()
+	srv.SendResponse()
+	srv.RtpSender.Start()
+	srv.State = state.Playing
+	log.Println("[RTSP] state changed: PLAYING")
+}
+
 func (srv *RtspServer) onPlay() {
 	srv.SendResponse()
+	if srv.IsStreaming {
+		srv.FrameLoader.Start()
+	}
 	srv.RtpSender.Start()
 	srv.State = state.Playing
 	log.Println("[RTSP] state changed: PLAYING")
@@ -142,6 +179,6 @@ func (srv *RtspServer) OnTeardown() {
 
 func (srv *RtspServer) OnDescribe() {
 	_, _ = srv.ClientConnection.Write([]byte(util.PrepareDescribeResponse(
-		srv.SequentialNumber, os.Args[1], components.MjpegType, srv.SessionId, srv.VideoFileName),
+		srv.SequentialNumber, os.Args[1], MjpegType, srv.SessionId, srv.VideoFileName),
 	))
 }

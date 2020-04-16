@@ -2,7 +2,7 @@ package main
 
 import (
 	"os"
-	"streming_server/client/client"
+	"streming_server/components"
 )
 
 func main() {
@@ -10,5 +10,5 @@ func main() {
 	serverPort := os.Args[2]
 	videoFileName := os.Args[3]
 
-	client.NewRtspClient(serverAddress, serverPort, videoFileName)
+	components.NewRtspClient(serverAddress, serverPort, videoFileName)
 }

@@ -21,7 +21,7 @@ func NewPacketFromBytes(packetAsBytes []byte, packetSize int) *Packet {
 	return &Packet{
 		Header:      header,
 		PayloadSize: packetSize - HeaderSize,
-		Payload:     packetAsBytes[12:],
+		Payload:     packetAsBytes[12:packetSize],
 	}
 }
 

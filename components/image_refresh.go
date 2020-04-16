@@ -1,8 +1,8 @@
 package components
 
 import (
-	"streming_server/client/ui"
-	"streming_server/client/video"
+	"streming_server/ui"
+	"streming_server/video"
 	"time"
 )
 
@@ -32,8 +32,7 @@ func (imgRef *ImageRefresh) updateImageInGui() {
 
 func (imgRef *ImageRefresh) Start() {
 	imgRef.started = true
-	imgRef.Ticker = time.NewTicker(imgRef.Interval)
-	//imgRef.doneCheck = make(chan bool)
+	imgRef.Ticker = time.NewTicker(33 * time.Millisecond)
 
 	go func() {
 		for {
