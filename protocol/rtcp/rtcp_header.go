@@ -1,9 +1,5 @@
 package rtcp
 
-import (
-	"errors"
-)
-
 const HeaderSize = 8
 
 type Header struct {
@@ -26,13 +22,7 @@ func NewHeader() *Header {
 	}
 }
 
-func NewHeaderFromBytes(payload []byte) (*Header, error) {
-
-	if len(payload) < HeaderSize {
-		err := errors.New("header is too small, probably broken packet")
-		return nil, err
-	}
-
+func NewHeaderFromBytes(payload []byte) *Header {
 	resultHeader := &Header{}
 	headerAsBytes := payload[:HeaderSize]
 
@@ -46,7 +36,7 @@ func NewHeaderFromBytes(payload []byte) (*Header, error) {
 		(int32(headerAsBytes[4]) << 24) + (int32(headerAsBytes[5]) << 16) +
 			(int32(headerAsBytes[6]) << 8) + int32(headerAsBytes[7])
 
-	return resultHeader, nil
+	return resultHeader
 }
 
 func (header Header) TransformToBytes() [HeaderSize]byte {

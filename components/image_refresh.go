@@ -7,49 +7,53 @@ import (
 )
 
 type ImageRefresh struct {
-	View      *ui.View
-	FrameSync *video.FrameSync
-	Ticker    *time.Ticker
-	Interval  time.Duration
+	view      *ui.View
+	frameSync *video.FrameSync
+	ticker    *time.Ticker
+	interval  time.Duration
 	doneCheck chan bool
 	started   bool
 }
 
 func NewImageRefresh(view *ui.View, frameSync *video.FrameSync) *ImageRefresh {
 	return &ImageRefresh{
-		View:      view,
-		FrameSync: frameSync,
+		view:      view,
+		frameSync: frameSync,
 		doneCheck: make(chan bool),
 		started:   false,
 	}
 }
 
-func (imgRef *ImageRefresh) updateImageInGui() {
-	if !imgRef.FrameSync.Empty() {
-		imgRef.View.UpdateImage()
+func (ir *ImageRefresh) SetInterval(interval time.Duration) {
+	ir.interval = interval
+}
+
+func (ir *ImageRefresh) updateImageInGui() {
+	if !ir.frameSync.Empty() {
+		ir.view.UpdateImage()
 	}
 }
 
-func (imgRef *ImageRefresh) Start() {
-	imgRef.started = true
-	imgRef.Ticker = time.NewTicker(33 * time.Millisecond)
+func (ir *ImageRefresh) Start() {
+	ir.started = true
+	ir.ticker = time.NewTicker(33 * time.Millisecond)
 
 	go func() {
 		for {
 			select {
-			case <-imgRef.doneCheck:
+			case <-ir.doneCheck:
 				return
-			case <-imgRef.Ticker.C:
-				imgRef.updateImageInGui()
+			case <-ir.ticker.C:
+				ir.updateImageInGui()
 			}
 		}
 	}()
 }
 
-func (imgRef *ImageRefresh) Stop() {
-	if imgRef.started {
-		imgRef.doneCheck <- true
-		imgRef.Ticker.Stop()
-		imgRef.started = false
+func (ir *ImageRefresh) Stop() {
+	if ir.started {
+		ir.doneCheck <- true
+		ir.ticker.Stop()
+		ir.started = false
 	}
 }

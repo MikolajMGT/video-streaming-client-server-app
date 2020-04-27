@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/canvas"
 	"fyne.io/fyne/layout"
 	"fyne.io/fyne/widget"
+	"log"
 	"streming_server/ui/resources"
 	"streming_server/video"
 )
@@ -28,8 +29,7 @@ type View struct {
 }
 
 func NewView(frameSync *video.FrameSync,
-	OnSetup func(), OnRecord func(), OnPlay func(), OnPause func(), OnDescribe func(), OnTeardown func(),
-) *View {
+	OnSetup func(), OnRecord func(), OnPlay func(), OnPause func(), OnDescribe func(), OnTeardown func()) *View {
 	view := &View{
 		FrameSync:  frameSync,
 		onSetup:    OnSetup,
@@ -71,7 +71,7 @@ func (view *View) StartGUI() {
 
 func (view *View) UpdateImage() {
 	if !view.FrameSync.Empty() {
-		view.Image.Resource = fyne.NewStaticResource("stream.jpeg", view.FrameSync.NextFrame())
+		view.Image.Resource = fyne.NewStaticResource("livestream", view.FrameSync.NextFrame())
 		canvas.Refresh(view.Image)
 	}
 }
@@ -84,13 +84,16 @@ func (view *View) UpdateStatistics(totalBytesReceived int, packageLost int, data
 		fmt.Sprint(resources.PackageLostText, packageLost),
 	)
 	view.StatisticsBox.Children[2].(*widget.Label).SetText(
-		fmt.Sprint(resources.DataRateText, dataRate),
+		fmt.Sprintf("%v%.2f", resources.DataRateText, dataRate),
 	)
 	view.StatisticsBox.Refresh()
 }
 
 func resolveIcon(name string) fyne.Resource {
-	icon, _ := fyne.LoadResourceFromPath(fmt.Sprintf("ui/resources/icons/%v-icon.png", name))
+	icon, err := fyne.LoadResourceFromPath(fmt.Sprintf("ui/resources/icons/%v-icon.png", name))
+	if err != nil {
+		log.Println("[ERROR] cannot retrieve resource:", err)
+	}
 	return icon
 }
 

@@ -11,12 +11,19 @@ import (
 )
 
 func main() {
+	if len(os.Args) < 2 {
+		log.Fatalln("[ERROR] incorrect number of arguments, please provide server port")
+	}
+
 	port := os.Args[1]
-	log.Println("[RTSP] Server started")
+	log.Println("[RTSP] server started")
 
 	mainChannel := make(chan *rtp.Packet)
 	serverMap := new(sync.Map)
-	listener, _ := net.Listen("tcp", fmt.Sprint(":", port))
+	listener, err := net.Listen("tcp", fmt.Sprint(":", port))
+	if err != nil {
+		log.Println("[ERROR] error while opening connection:", err)
+	}
 
 	go func(serverMap *sync.Map) {
 		for {
@@ -25,10 +32,10 @@ func main() {
 				func(k, v interface{}) bool {
 					srv := k.(*components.RtspServer)
 					privateChan := v.(chan *rtp.Packet)
+					// skip sending packet to yourself
 					if !srv.IsStreaming {
-						return true
+						privateChan <- packet
 					}
-					privateChan <- packet
 					return true
 				},
 			)
@@ -36,11 +43,14 @@ func main() {
 	}(serverMap)
 
 	for {
-		clientConnection, _ := listener.Accept()
+		clientConnection, err := listener.Accept()
+		if err != nil {
+			log.Println("[ERROR] error while connecting with client:", err)
+		}
 		go func(clientConnection net.Conn, serverMap *sync.Map) {
 			log.Printf("[RTSP] received new connection from %v", clientConnection.RemoteAddr().String())
 			privateChannel := make(chan *rtp.Packet)
-			srv := components.NewRtspServer(clientConnection, mainChannel, privateChannel)
+			srv := components.NewServer(clientConnection, mainChannel, privateChannel)
 			serverMap.LoadOrStore(srv, privateChannel)
 			srv.Start()
 		}(clientConnection, serverMap)

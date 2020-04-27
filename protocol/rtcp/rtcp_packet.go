@@ -26,7 +26,7 @@ func NewPacket(fractionLost float64, cumulativeLost int, highestSeqNum int) *Pac
 
 func NewPacketFromBytes(packetAsBytes []byte) *Packet {
 	headerBytes := packetAsBytes[:HeaderSize]
-	header, _ := NewHeaderFromBytes(headerBytes)
+	header := NewHeaderFromBytes(headerBytes)
 	bits := binary.LittleEndian.Uint64(packetAsBytes[HeaderSize:16])
 
 	return &Packet{

@@ -1,7 +1,6 @@
 package rtp
 
 import (
-	"errors"
 	"log"
 )
 
@@ -53,13 +52,7 @@ func (header Header) TransformToBytes() [HeaderSize]byte {
 	}
 }
 
-func NewHeaderFromBytes(payload []byte) (*Header, error) {
-
-	if len(payload) < HeaderSize {
-		err := errors.New("header is too small, probably broken packet")
-		return nil, err
-	}
-
+func NewHeaderFromBytes(payload []byte) *Header {
 	resultRtpHeader := &Header{}
 	headerAsBytes := payload[:HeaderSize]
 
@@ -78,7 +71,7 @@ func NewHeaderFromBytes(payload []byte) (*Header, error) {
 		(int(headerAsBytes[8]) << 24) + (int(headerAsBytes[9]) << 16) +
 			(int(headerAsBytes[10]) << 8) + int(headerAsBytes[11])
 
-	return resultRtpHeader, nil
+	return resultRtpHeader
 }
 
 func (header Header) Log() {

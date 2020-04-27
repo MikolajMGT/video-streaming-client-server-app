@@ -3,20 +3,18 @@ package components
 import (
 	"streming_server/protocol/rtp"
 	"streming_server/video"
-	"time"
 )
 
 type FrameLoader struct {
-	Ticker         *time.Ticker
-	FrameSync      *video.FrameSync
+	frameSync      *video.FrameSync
+	privateChannel chan *rtp.Packet
 	started        bool
 	doneCheck      chan bool
-	privateChannel chan *rtp.Packet
 }
 
 func NewFrameLoader(frameSync *video.FrameSync, privateChannel chan *rtp.Packet) *FrameLoader {
 	return &FrameLoader{
-		FrameSync:      frameSync,
+		frameSync:      frameSync,
 		started:        false,
 		doneCheck:      make(chan bool),
 		privateChannel: privateChannel,
@@ -32,7 +30,7 @@ func (fl *FrameLoader) Start() {
 			case <-fl.doneCheck:
 				return
 			case packet := <-fl.privateChannel:
-				fl.FrameSync.AddFrame(packet.Payload, packet.Header.SequenceNumber)
+				fl.frameSync.AddFrame(packet.Payload, packet.Header.SequenceNumber)
 			}
 		}
 	}()

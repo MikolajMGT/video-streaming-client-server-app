@@ -2,6 +2,7 @@ package components
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"streming_server/protocol/rtcp"
 	"streming_server/util"
@@ -10,10 +11,10 @@ import (
 )
 
 type RtcpReceiver struct {
-	Ticker          *time.Ticker
-	Interval        time.Duration
-	UdpCon          *net.PacketConn
-	CongestionLevel int
+	ticker          *time.Ticker
+	interval        time.Duration
+	udpCon          *net.PacketConn
+	congestionLevel int
 	buffer          []byte
 	doneCheck       chan bool
 	ServerAddress   string
@@ -22,43 +23,50 @@ type RtcpReceiver struct {
 func NewRtcpReceiver(clientAddress net.Addr) *RtcpReceiver {
 	addressAndPort := strings.Split(clientAddress.String(), ":")
 	address := fmt.Sprintf("%v:%v", addressAndPort[0], 0)
-	udpConn, _ := net.ListenPacket("udp", address)
+	udpConn, err := net.ListenPacket("udp", address)
+	if err != nil {
+		log.Fatalln("[RTCP] error while opening connection:", err)
+	}
 	serverAddress := udpConn.LocalAddr().String()
 
 	return &RtcpReceiver{
-		Interval:        DefaultRtcpInterval * time.Millisecond,
-		UdpCon:          &udpConn,
+		interval:        DefaultRtcpInterval * time.Millisecond,
+		udpCon:          &udpConn,
 		buffer:          make([]byte, 24),
 		doneCheck:       make(chan bool),
-		CongestionLevel: util.NoCongestion,
+		congestionLevel: util.NoCongestion,
 		ServerAddress:   serverAddress,
 	}
 }
 
-func (receiver *RtcpReceiver) receive() {
-	_, _, _ = (*receiver.UdpCon).ReadFrom(receiver.buffer)
-	rtcpPacket := rtcp.NewPacketFromBytes(receiver.buffer)
+func (r *RtcpReceiver) receive() {
+	_, _, err := (*r.udpCon).ReadFrom(r.buffer)
+	if err != nil {
+		log.Println("[RTCP] error while reading packet:", err)
+		return
+	}
+	rtcpPacket := rtcp.NewPacketFromBytes(r.buffer)
 	rtcpPacket.Log()
 
-	receiver.CongestionLevel = util.ResolveCongestionLevel(rtcpPacket.FractionLost)
+	r.congestionLevel = util.ResolveCongestionLevel(rtcpPacket.FractionLost)
 }
 
-func (receiver *RtcpReceiver) Start() {
-	receiver.Ticker = time.NewTicker(receiver.Interval)
+func (r *RtcpReceiver) Start() {
+	r.ticker = time.NewTicker(r.interval)
 
 	go func() {
 		for {
 			select {
-			case <-receiver.doneCheck:
+			case <-r.doneCheck:
 				return
-			case <-receiver.Ticker.C:
-				receiver.receive()
+			case <-r.ticker.C:
+				r.receive()
 			}
 		}
 	}()
 }
 
-func (receiver *RtcpReceiver) Stop() {
-	receiver.doneCheck <- true
-	receiver.Ticker.Stop()
+func (r *RtcpReceiver) Stop() {
+	r.doneCheck <- true
+	r.ticker.Stop()
 }

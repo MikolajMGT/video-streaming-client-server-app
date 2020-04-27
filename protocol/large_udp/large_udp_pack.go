@@ -75,11 +75,3 @@ func (luc *LargeUdpPack) ReadFrom(b []byte) (int, bool, error) {
 	fmt.Println("map", len(luc.packetsToJoin))
 	return nTotal, false, nil
 }
-
-//func (luc *LargeUdpPack) ClearMemoryIfPossible(currentSeqNum int) {
-//	for k, _ := range luc.packetsToJoin {
-//		if k < uint16(currentSeqNum) {
-//			delete(luc.packetsToJoin, k)
-//		}
-//	}
-//}

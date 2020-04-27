@@ -1,7 +1,6 @@
 package components
 
 import (
-	"fmt"
 	"log"
 	"net"
 	"streming_server/protocol/large_udp"
@@ -15,73 +14,63 @@ import (
 const DefaultRtpInterval = 1
 
 type RtpReceiver struct {
-	Server            *RtspServer
-	FrameSync         *video.FrameSync
-	View              *ui.View
-	Ticker            *time.Ticker
-	Interval          time.Duration
-	UdpCon            *large_udp.LargeUdpPack
-	HighestRecvSeqNum int
-	CumulativeLost    int
-	ExpectedSeqNum    int
-	TotalBytes        int
+	server            *RtspServer
+	frameSync         *video.FrameSync
+	view              *ui.View
+	ticker            *time.Ticker
+	interval          time.Duration
+	udpCon            *large_udp.LargeUdpPack
+	highestRecvSeqNum int
+	cumulativeLost    int
+	expectedSeqNum    int
+	totalBytes        int
 	doneCheck         chan bool
-	StartTime         int64
+	startTime         int64
+	totalPlayTime     int64
 	started           bool
-	ListeningPort     string
+	listeningPort     string
 }
 
 func NewRtpReceiver(frameSync *video.FrameSync, view *ui.View) *RtpReceiver {
-
 	udpConn, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
-		fmt.Println(err)
+		log.Fatalln("[RTP] cannot make rtp connection:", err)
 	}
 	listeningPort := strings.Split(udpConn.LocalAddr().String(), ":")[1]
 	largeUdpCon := large_udp.NewLargeUdpPackWithSize(udpConn, 64000)
 
 	return &RtpReceiver{
-		FrameSync:      frameSync,
-		View:           view,
-		Interval:       DefaultRtpInterval * time.Microsecond,
-		UdpCon:         largeUdpCon,
+		frameSync:      frameSync,
+		view:           view,
+		interval:       DefaultRtpInterval * time.Millisecond,
+		udpCon:         largeUdpCon,
 		doneCheck:      make(chan bool),
-		ExpectedSeqNum: 0,
-		TotalBytes:     0,
+		expectedSeqNum: 0,
+		totalBytes:     0,
+		totalPlayTime:  0,
+		startTime:      0,
 		started:        false,
-		ListeningPort:  listeningPort,
-		// TODO Review statistics calculation
+		listeningPort:  listeningPort,
 	}
 }
 
-func NewRtpReceiverWithServer(server *RtspServer, frameSync *video.FrameSync, view *ui.View) *RtpReceiver {
-
-	udpConn, err := net.ListenPacket("udp", "127.0.0.1:0")
-	if err != nil {
-		fmt.Println(err)
-	}
-	listeningPort := strings.Split(udpConn.LocalAddr().String(), ":")[1]
-	largeUdpCon := large_udp.NewLargeUdpPackWithSize(udpConn, 64000)
-
-	return &RtpReceiver{
-		Server:         server,
-		FrameSync:      frameSync,
-		View:           view,
-		Interval:       DefaultRtpInterval * time.Microsecond,
-		UdpCon:         largeUdpCon,
-		doneCheck:      make(chan bool),
-		ExpectedSeqNum: 0,
-		TotalBytes:     0,
-		started:        false,
-		ListeningPort:  listeningPort,
-		// TODO HighestRecvSeqNum, CumulativeLost initial?
-	}
+func NewRtpReceiverWithServer(server *RtspServer, frameSync *video.FrameSync) *RtpReceiver {
+	rtpReceiver := NewRtpReceiver(frameSync, nil)
+	rtpReceiver.server = server
+	return rtpReceiver
 }
 
-func (receiver *RtpReceiver) receive() {
-	log.Println("RECEIVE")
+func (r *RtpReceiver) SetStartTime(startTime int64) {
+	r.startTime = startTime
+}
+
+func (r *RtpReceiver) receive() {
+	log.Println("[RTP] received packet")
 	buf := make([]byte, 300000)
-	packetLength, full, _ := receiver.UdpCon.ReadFrom(buf)
+	packetLength, full, err := r.udpCon.ReadFrom(buf)
+	if err != nil {
+		log.Println("[RTP] error while reading packet:", err)
+	}
 	buf = buf[:packetLength]
 
 	if !full {
@@ -90,36 +79,39 @@ func (receiver *RtpReceiver) receive() {
 
 	//current unix time in milliseconds
 	currentTime := time.Now().UnixNano() / int64(time.Millisecond)
-	totalPlayTime := currentTime - receiver.StartTime
-	receiver.StartTime = currentTime
+	r.totalPlayTime += currentTime - r.startTime
+	r.startTime = currentTime
 
 	rtpPacket := rtp.NewPacketFromBytes(buf, packetLength)
 	rtpPacket.Header.Log()
 
-	receiver.ExpectedSeqNum++
-	if rtpPacket.Header.SequenceNumber > receiver.HighestRecvSeqNum {
-		receiver.HighestRecvSeqNum = rtpPacket.Header.SequenceNumber
+	r.expectedSeqNum++
+	if rtpPacket.Header.SequenceNumber > r.highestRecvSeqNum {
+		r.highestRecvSeqNum = rtpPacket.Header.SequenceNumber
 	}
-	if receiver.ExpectedSeqNum != rtpPacket.Header.SequenceNumber {
-		receiver.CumulativeLost++
+	if r.expectedSeqNum != rtpPacket.Header.SequenceNumber {
+		r.cumulativeLost++
 	}
 
 	dataRate := 0.0
-	if totalPlayTime != 0 {
-		dataRate = float64(receiver.TotalBytes) / (float64(totalPlayTime) / 1000.0)
+	if r.totalPlayTime != 0 {
+		dataRate = float64(r.totalBytes) / (float64(r.totalPlayTime) / 1000)
 	}
-	fractionLost := receiver.CumulativeLost / receiver.HighestRecvSeqNum
-	receiver.TotalBytes += len(rtpPacket.Payload)
+	fractionLost := r.cumulativeLost / r.highestRecvSeqNum
+	r.totalBytes += len(rtpPacket.Payload)
 
-	receiver.View.UpdateStatistics(receiver.TotalBytes, fractionLost, dataRate)
-	receiver.FrameSync.AddFrame(rtpPacket.Payload, rtpPacket.Header.SequenceNumber)
+	r.view.UpdateStatistics(r.totalBytes, fractionLost, dataRate)
+	r.frameSync.AddFrame(rtpPacket.Payload, rtpPacket.Header.SequenceNumber)
 }
 
-func (receiver *RtpReceiver) receiveAndForward() {
-	log.Println("RECEIVE AND FORWARD")
+func (r *RtpReceiver) receiveAndForward() {
+	log.Println("[rtp] received and forwarded rtp packet")
 
 	buf := make([]byte, 300000)
-	packetLength, full, _ := receiver.UdpCon.ReadFrom(buf)
+	packetLength, full, err := r.udpCon.ReadFrom(buf)
+	if err != nil {
+		log.Println("[RTP] error while reading packet:", err)
+	}
 	buf = buf[:packetLength]
 
 	if !full {
@@ -128,49 +120,50 @@ func (receiver *RtpReceiver) receiveAndForward() {
 
 	//current unix time in milliseconds
 	currentTime := time.Now().UnixNano() / int64(time.Millisecond)
-	receiver.StartTime = currentTime
+	r.totalPlayTime += currentTime - r.startTime
+	r.startTime = currentTime
 
 	rtpPacket := rtp.NewPacketFromBytes(buf, packetLength)
 	rtpPacket.Header.Log()
 
-	receiver.ExpectedSeqNum++
-	if rtpPacket.Header.SequenceNumber > receiver.HighestRecvSeqNum {
-		receiver.HighestRecvSeqNum = rtpPacket.Header.SequenceNumber
+	r.expectedSeqNum++
+	if rtpPacket.Header.SequenceNumber > r.highestRecvSeqNum {
+		r.highestRecvSeqNum = rtpPacket.Header.SequenceNumber
 	}
-	if receiver.ExpectedSeqNum != rtpPacket.Header.SequenceNumber {
-		receiver.CumulativeLost++
+	if r.expectedSeqNum != rtpPacket.Header.SequenceNumber {
+		r.cumulativeLost++
 	}
 
-	receiver.TotalBytes += len(rtpPacket.Payload)
+	r.totalBytes += len(rtpPacket.Payload)
 
-	receiver.Server.MainChannel <- rtpPacket
+	r.server.mainChannel <- rtpPacket
 }
 
-func (receiver *RtpReceiver) Start() {
-	receiver.started = true
-	receiver.Ticker = time.NewTicker(receiver.Interval)
-	receiver.doneCheck = make(chan bool)
+func (r *RtpReceiver) Start() {
+	r.started = true
+	r.ticker = time.NewTicker(r.interval)
+	r.doneCheck = make(chan bool)
 
 	go func() {
 		for {
 			select {
-			case <-receiver.doneCheck:
+			case <-r.doneCheck:
 				return
-			case <-receiver.Ticker.C:
-				if receiver.Server != nil {
-					receiver.receiveAndForward()
+			case <-r.ticker.C:
+				if r.server != nil {
+					r.receiveAndForward()
 				} else {
-					receiver.receive()
+					r.receive()
 				}
 			}
 		}
 	}()
 }
 
-func (receiver *RtpReceiver) Stop() {
-	if receiver.started {
-		close(receiver.doneCheck)
-		receiver.Ticker.Stop()
-		receiver.started = false
+func (r *RtpReceiver) Stop() {
+	if r.started {
+		close(r.doneCheck)
+		r.ticker.Stop()
+		r.started = false
 	}
 }

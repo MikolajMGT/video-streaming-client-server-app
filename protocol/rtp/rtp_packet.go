@@ -16,7 +16,7 @@ func NewPacket(rtpHeader *Header, payloadSize int, payload []byte) *Packet {
 
 func NewPacketFromBytes(packetAsBytes []byte, packetSize int) *Packet {
 	headerBytes := packetAsBytes[:12]
-	header, _ := NewHeaderFromBytes(headerBytes)
+	header := NewHeaderFromBytes(headerBytes)
 
 	return &Packet{
 		Header:      header,

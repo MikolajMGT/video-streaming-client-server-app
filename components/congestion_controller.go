@@ -12,12 +12,12 @@ const DefaultCongestionInterval = 400
 
 // TODO adjust to client streaming mechanism (temporarily disabled due to lack of compatibility)
 type CongestionController struct {
-	Ticker              *time.Ticker
-	RtpSender           *RtpSender
+	ticker              *time.Ticker
+	rtpSender           *RtpSender
 	rtcpReceiver        *RtcpReceiver
-	FrameSync           *video.FrameSync
-	QualityAdjuster     *video.QualityAdjuster
-	Interval            time.Duration
+	frameSync           *video.FrameSync
+	qualityAdjuster     *video.QualityAdjuster
+	interval            time.Duration
 	doneCheck           chan bool
 	prevCongestionLevel int
 }
@@ -25,50 +25,54 @@ type CongestionController struct {
 func NewCongestionController(rtcpReceiver *RtcpReceiver, frameSync *video.FrameSync) *CongestionController {
 	return &CongestionController{
 		rtcpReceiver:        rtcpReceiver,
-		FrameSync:           frameSync,
-		QualityAdjuster:     video.NewQualityAdjuster(),
-		Interval:            DefaultCongestionInterval * time.Millisecond,
+		frameSync:           frameSync,
+		qualityAdjuster:     video.NewQualityAdjuster(),
+		interval:            DefaultCongestionInterval * time.Millisecond,
 		doneCheck:           make(chan bool),
 		prevCongestionLevel: util.NoCongestion,
 	}
 }
 
-func (con *CongestionController) adjustSendRate() {
-	if con.prevCongestionLevel != con.rtcpReceiver.CongestionLevel {
-		sendDelay := con.FrameSync.FramePeriod +
-			con.rtcpReceiver.CongestionLevel*int(float64(con.FrameSync.FramePeriod)*0.1)
-		con.RtpSender.UpdateInterval(time.Duration(sendDelay) * time.Millisecond)
-		con.prevCongestionLevel = con.rtcpReceiver.CongestionLevel
-		log.Println("[congestion] send delay has been changed to ", sendDelay)
+func (cc *CongestionController) SetRtpSender(rtpSender *RtpSender) {
+	cc.rtpSender = rtpSender
+}
+
+func (cc *CongestionController) adjustSendRate() {
+	if cc.prevCongestionLevel != cc.rtcpReceiver.congestionLevel {
+		sendDelay := cc.frameSync.FramePeriod +
+			cc.rtcpReceiver.congestionLevel*int(float64(cc.frameSync.FramePeriod)*0.1)
+		cc.rtpSender.UpdateInterval(time.Duration(sendDelay) * time.Millisecond)
+		cc.prevCongestionLevel = cc.rtcpReceiver.congestionLevel
+		log.Println("[CC] send delay has been changed to", sendDelay)
 	}
 }
 
-func (con *CongestionController) AdjustCompressionQuality(frameBuffer []byte, imageLength int) {
-	if con.rtcpReceiver.CongestionLevel > util.NoCongestion {
-		lowerQuality := jpeg.DefaultQuality - int(jpeg.DefaultQuality*0.15*float64(con.rtcpReceiver.CongestionLevel))
-		con.QualityAdjuster.ChangeCompressionQuality(lowerQuality)
-		frameBytes := con.QualityAdjuster.Compress(frameBuffer[0:imageLength])
+func (cc *CongestionController) AdjustCompressionQuality(frameBuffer []byte, imageLength int) {
+	if cc.rtcpReceiver.congestionLevel > util.NoCongestion {
+		lowerQuality := jpeg.DefaultQuality - int(jpeg.DefaultQuality*0.15*float64(cc.rtcpReceiver.congestionLevel))
+		cc.qualityAdjuster.ChangeCompressionQuality(lowerQuality)
+		frameBytes := cc.qualityAdjuster.Compress(frameBuffer[0:imageLength])
 		copy(frameBuffer, frameBytes)
-		log.Println("Quality changed to", lowerQuality)
+		log.Println("[CC] quality changed to", lowerQuality)
 	}
 }
 
-func (con *CongestionController) Start() {
-	con.Ticker = time.NewTicker(con.Interval)
+func (cc *CongestionController) Start() {
+	cc.ticker = time.NewTicker(cc.interval)
 
 	go func() {
 		for {
 			select {
-			case <-con.doneCheck:
+			case <-cc.doneCheck:
 				return
-			case <-con.Ticker.C:
-				con.adjustSendRate()
+			case <-cc.ticker.C:
+				cc.adjustSendRate()
 			}
 		}
 	}()
 }
 
-func (con *CongestionController) Stop() {
-	con.doneCheck <- true
-	con.Ticker.Stop()
+func (cc *CongestionController) Stop() {
+	cc.doneCheck <- true
+	cc.ticker.Stop()
 }

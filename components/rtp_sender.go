@@ -15,13 +15,13 @@ const MjpegType = 26
 const DefaultInterval = 10
 
 type RtpSender struct {
-	RtcpReceiver         *RtcpReceiver
-	CongestionController *CongestionController
-	FrameSync            *video.FrameSync
-	Ticker               *time.Ticker
-	ClientConnection     *large_udp.LargeUdpConn
-	Interval             time.Duration
-	FrameBuffer          []byte
+	rtcpReceiver         *RtcpReceiver
+	congestionController *CongestionController
+	frameSync            *video.FrameSync
+	ticker               *time.Ticker
+	clientConnection     *large_udp.LargeUdpConn
+	interval             time.Duration
+	frameBuffer          []byte
 	doneCheck            chan bool
 	started              bool
 }
@@ -32,77 +32,85 @@ func NewRtpSender(
 ) *RtpSender {
 
 	addressAndPort := strings.Split(clientAddress.String(), ":")
-	address, _ := net.ResolveUDPAddr("udp", fmt.Sprintf("%v:%v", addressAndPort[0],
+	address, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%v:%v", addressAndPort[0],
 		destinationPort))
-	clientConnection, _ := net.DialUDP("udp", nil, address)
+	if err != nil {
+		log.Fatalln("[RTP] cannot resolve address:", err)
+	}
+	clientConnection, err := net.DialUDP("udp", nil, address)
+	if err != nil {
+		log.Fatalln("[RTP] cannot resolve rtp connection:", err)
+	}
 	largeUdpConn := large_udp.NewLargeUdpConnWithSize(clientConnection, 64000)
 
-	//interval := time.Millisecond * time.Duration(videoStream.FramePeriod)
-
 	result := RtpSender{
-		RtcpReceiver:         rtcpReceiver,
-		CongestionController: congestionController,
-		FrameSync:            frameSync,
-		Interval:             time.Duration(DefaultInterval) * time.Millisecond,
-		FrameBuffer:          make([]byte, 300000),
+		rtcpReceiver:         rtcpReceiver,
+		congestionController: congestionController,
+		frameSync:            frameSync,
+		interval:             time.Duration(DefaultInterval) * time.Millisecond,
+		frameBuffer:          make([]byte, 300000),
 		doneCheck:            make(chan bool),
+		clientConnection:     largeUdpConn,
 		started:              false,
-		ClientConnection:     largeUdpConn,
 	}
 
 	return &result
 }
 
-func (sender *RtpSender) SendFrame() {
+func (s *RtpSender) SendFrame() {
 
-	if sender.FrameSync.Empty() {
+	if s.frameSync.Empty() {
 		return
 	}
-	data := sender.FrameSync.NextFrame()
+	data := s.frameSync.NextFrame()
 
 	if len(data) == 0 {
-		sender.Stop()
+		s.Stop()
 		return
 	}
 
-	//sender.CongestionController.AdjustCompressionQuality(sender.FrameBuffer, imageLength)
+	//s.congestionController.AdjustCompressionQuality(s.frameBuffer, imageLength)
 	rtpPacket := rtp.NewPacket(
 		rtp.NewHeader(
-			MjpegType, sender.FrameSync.CurrentSeqNum, sender.FrameSync.CurrentSeqNum*sender.FrameSync.FramePeriod,
+			MjpegType, s.frameSync.CurrentSeqNum, s.frameSync.CurrentSeqNum*s.frameSync.FramePeriod,
 		),
 		len(data), data,
 	)
-	_, _ = sender.ClientConnection.Write(rtpPacket.TransformToBytes())
-	log.Printf("Sent frame no. %v with size %v", sender.FrameSync.CurrentSeqNum, len(data))
+	_, err := s.clientConnection.Write(rtpPacket.TransformToBytes())
+	if err != nil {
+		log.Println("[RTP] error while sending packet:", err)
+		return
+	}
+	log.Printf("Sent frame no. %v with size %v", s.frameSync.CurrentSeqNum, len(data))
 	rtpPacket.Header.Log()
 }
 
-func (sender *RtpSender) Start() {
-	sender.RtcpReceiver.Start()
-	sender.started = true
-	sender.Ticker = time.NewTicker(sender.Interval)
+func (s *RtpSender) Start() {
+	s.rtcpReceiver.Start()
+	s.started = true
+	s.ticker = time.NewTicker(s.interval)
 
 	go func() {
 		for {
 			select {
-			case <-sender.doneCheck:
+			case <-s.doneCheck:
 				return
-			case <-sender.Ticker.C:
-				sender.SendFrame()
+			case <-s.ticker.C:
+				s.SendFrame()
 			}
 		}
 	}()
 }
 
-func (sender *RtpSender) Stop() {
-	if sender.started {
-		sender.RtcpReceiver.Stop()
-		sender.doneCheck <- true
-		sender.Ticker.Stop()
+func (s *RtpSender) Stop() {
+	if s.started {
+		s.rtcpReceiver.Stop()
+		s.doneCheck <- true
+		s.ticker.Stop()
 	}
 }
 
-func (sender *RtpSender) UpdateInterval(newInterval time.Duration) {
-	sender.Ticker.Stop()
-	sender.Ticker = time.NewTicker(newInterval)
+func (s *RtpSender) UpdateInterval(newInterval time.Duration) {
+	s.ticker.Stop()
+	s.ticker = time.NewTicker(newInterval)
 }

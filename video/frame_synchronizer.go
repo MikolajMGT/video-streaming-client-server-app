@@ -2,6 +2,7 @@ package video
 
 import (
 	"github.com/enriquebris/goconcurrentqueue"
+	"log"
 )
 
 type FrameSync struct {
@@ -20,13 +21,19 @@ func NewFrameSync() *FrameSync {
 
 func (fs *FrameSync) AddFrame(image []byte, sequentialNumber int) {
 	if sequentialNumber > fs.CurrentSeqNum {
-		_ = fs.FramesQueue.Enqueue(image)
+		err := fs.FramesQueue.Enqueue(image)
+		if err != nil {
+			log.Fatalln("[ERROR] cannot add frame to queue:", err)
+		}
 	}
 }
 
 func (fs *FrameSync) NextFrame() []byte {
 	fs.CurrentSeqNum++
-	data, _ := fs.FramesQueue.DequeueOrWaitForNextElement()
+	data, err := fs.FramesQueue.DequeueOrWaitForNextElement()
+	if err != nil {
+		log.Fatalln("[ERROR] cannot get frame from queue:", err)
+	}
 	return data.([]byte)
 }
 

@@ -4,65 +4,77 @@ import (
 	"bytes"
 	"gocv.io/x/gocv"
 	"image/jpeg"
-	"streming_server/protocol/rtp"
+	"log"
 	"streming_server/ui"
 	"streming_server/video"
 	"time"
 )
 
 type Broadcast struct {
-	Server       *RtspServer
-	FrameSync    *video.FrameSync
-	View         *ui.View
-	VideoCapture *gocv.VideoCapture
-	VideoMat     *gocv.Mat
-	Ticker       *time.Ticker
-	Interval     time.Duration
-	SeqNum       int
+	server       *RtspServer
+	frameSync    *video.FrameSync
+	view         *ui.View
+	videoCapture *gocv.VideoCapture
+	videoMat     *gocv.Mat
+	ticker       *time.Ticker
+	interval     time.Duration
+	seqNum       int
 	doneCheck    chan bool
-	mainChannel  chan *rtp.Packet
 	started      bool
 }
 
 func NewBroadcast(srv *RtspServer, sync *video.FrameSync, view *ui.View) *Broadcast {
 	videoMat := gocv.NewMat()
 	return &Broadcast{
-		Server:    srv,
-		FrameSync: sync,
-		View:      view,
-		VideoMat:  &videoMat,
-		Interval:  30 * time.Millisecond,
-		SeqNum:    1,
+		server:    srv,
+		frameSync: sync,
+		view:      view,
+		videoMat:  &videoMat,
+		interval:  33 * time.Millisecond,
+		seqNum:    1,
 		doneCheck: make(chan bool),
 		started:   false,
 	}
 }
 
 func (br *Broadcast) nextFrame() {
-	br.VideoCapture.Read(br.VideoMat)
-	img, _ := br.VideoMat.ToImage()
+	br.videoCapture.Read(br.videoMat)
+	img, err := br.videoMat.ToImage()
+	if err != nil {
+		log.Println("[ERROR] unable to intercept frame from camera:", err)
+		return
+	}
 
 	buffer := new(bytes.Buffer)
-	_ = jpeg.Encode(buffer, img, nil)
+	err = jpeg.Encode(buffer, img, nil)
+	if err != nil {
+		log.Println("[ERROR] unable to compress frame to jpeg:", err)
+		return
+	}
 
-	br.FrameSync.AddFrame(buffer.Bytes(), br.SeqNum)
-	br.Server.FrameSync.AddFrame(buffer.Bytes(), br.SeqNum)
+	br.frameSync.AddFrame(buffer.Bytes(), br.seqNum)
+	br.server.frameSync.AddFrame(buffer.Bytes(), br.seqNum)
 
-	br.View.UpdateImage()
-	br.SeqNum++
+	br.view.UpdateImage()
+	br.seqNum++
 }
 
 func (br *Broadcast) Start() {
-	br.VideoCapture, _ = gocv.VideoCaptureDevice(0)
+	videoCapture, err := gocv.VideoCaptureDevice(0)
+	if err != nil {
+		log.Fatalln("[ERROR] unable to connect with webcam:", err)
+	}
+
+	br.videoCapture = videoCapture
 	br.started = true
-	br.Ticker = time.NewTicker(br.Interval)
+	br.ticker = time.NewTicker(br.interval)
 
 	go func() {
 		for {
 			select {
 			case <-br.doneCheck:
 				return
-			case <-br.Ticker.C:
+			case <-br.ticker.C:
 				br.nextFrame()
 			}
 		}
@@ -72,8 +84,12 @@ func (br *Broadcast) Start() {
 func (br *Broadcast) Stop() {
 	if br.started {
 		br.doneCheck <- true
-		br.Ticker.Stop()
+		br.ticker.Stop()
 		br.started = false
-		_ = br.VideoCapture.Close()
+
+		err := br.videoCapture.Close()
+		if err != nil {
+			log.Fatalln("[ERROR] cannot disconnect with webcam properly:", err)
+		}
 	}
 }

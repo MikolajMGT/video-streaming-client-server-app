@@ -14,27 +14,28 @@ import (
 )
 
 type RtspClient struct {
-	Server           *RtspServer
-	RtcpSender       *RtcpSender
-	RtpReceiver      *RtpReceiver
-	ImageRefresh     *ImageRefresh
-	FrameSync        *video.FrameSync
-	Broadcast        *Broadcast
-	View             *ui.View
-	ServerConnection net.Conn
-	State            state.State
-	VideoFileName    string
-	SessionId        string
-	SequentialNumber int
-	isReceiverClient bool
+	server           *RtspServer
+	rtcpSender       *RtcpSender
+	rtpReceiver      *RtpReceiver
+	imageRefresh     *ImageRefresh
+	frameSync        *video.FrameSync
+	broadcast        *Broadcast
+	view             *ui.View
+	serverConnection net.Conn
+	state            state.State
+	videoFileName    string
+	sessionId        string
+	sequentialNumber int
+	isServerside     bool
 }
 
-func NewRtspClientWithoutGui(server *RtspServer, serverAddress string, serverPort string, videoFileName string) *RtspClient {
+func NewClient(serverAddress string, serverPort string, videoFileName string) *RtspClient {
 	log.Println("[RTSP] client started")
 
 	rtspClient := &RtspClient{
-		VideoFileName: videoFileName,
-		State:         state.Init,
+		videoFileName:    videoFileName,
+		state:            state.Init,
+		sequentialNumber: 1,
 	}
 
 	frameSync := video.NewFrameSync()
@@ -43,201 +44,196 @@ func NewRtspClientWithoutGui(server *RtspServer, serverAddress string, serverPor
 		rtspClient.onPause, rtspClient.onDescribe, rtspClient.onTeardown,
 	)
 
-	rtpReceiver := NewRtpReceiverWithServer(server, frameSync, view)
-	rtcpSender := NewRtcpSender(rtpReceiver)
-	imageRefresh := NewImageRefresh(view, frameSync)
-	serverConnection, _ := net.Dial("tcp", fmt.Sprintf("%v:%v", serverAddress, serverPort))
-
-	rtspClient.FrameSync = frameSync
-	rtspClient.RtcpSender = rtcpSender
-	rtspClient.RtpReceiver = rtpReceiver
-	rtspClient.ImageRefresh = imageRefresh
-	rtspClient.View = view
-	rtspClient.ServerConnection = serverConnection
-	rtspClient.isReceiverClient = true
-	log.Println("[RTSP] connected with server.")
-	//rtspClient.View.StartGUI()
-	return rtspClient
-}
-
-func NewRtspClient(serverAddress string, serverPort string, videoFileName string) *RtspClient {
-	log.Println("[RTSP] client started")
-
-	rtspClient := &RtspClient{
-		VideoFileName: videoFileName,
-		State:         state.Init,
-	}
-
-	frameSync := video.NewFrameSync()
-	view := ui.NewView(frameSync,
-		rtspClient.onSetup, rtspClient.onRecord, rtspClient.onPlay,
-		rtspClient.onPause, rtspClient.onDescribe, rtspClient.onTeardown,
-	)
-
-	//srv := NewSingleConnRtpServer()
 	rtpReceiver := NewRtpReceiver(frameSync, view)
-	rtcpSender := NewRtcpSender(rtpReceiver)
-	imageRefresh := NewImageRefresh(view, frameSync)
-	//broadcast := NewBroadcast(srv, frameSync, view)
-	serverConnection, _ := net.Dial("tcp", fmt.Sprintf("%v:%v", serverAddress, serverPort))
+	serverConnection, err := net.Dial("tcp", fmt.Sprintf("%v:%v", serverAddress, serverPort))
+	if err != nil {
+		log.Fatalln("[RTSP] cannot connect to the server:", err)
+	}
 
-	//rtspClient.Server = srv
-	rtspClient.FrameSync = frameSync
-	rtspClient.RtcpSender = rtcpSender
-	rtspClient.RtpReceiver = rtpReceiver
-	rtspClient.ImageRefresh = imageRefresh
-	//rtspClient.Broadcast = broadcast
-	rtspClient.View = view
-	rtspClient.ServerConnection = serverConnection
-	rtspClient.isReceiverClient = false
+	rtspClient.rtcpSender = NewRtcpSender(rtpReceiver)
+	rtspClient.imageRefresh = NewImageRefresh(view, frameSync)
+	rtspClient.frameSync = frameSync
+	rtspClient.rtpReceiver = rtpReceiver
+	rtspClient.view = view
+	rtspClient.serverConnection = serverConnection
+	rtspClient.isServerside = false
+	rtspClient.view.StartGUI()
+
 	log.Println("[RTSP] connected with server.")
-	rtspClient.View.StartGUI()
 	return rtspClient
 }
 
-func (rtspClient *RtspClient) onSetup() {
-	log.Println("[GUI] Setup button has been pressed.")
-	if rtspClient.State == state.Init {
-		rtspClient.SequentialNumber = 1
+// used to receive video from streaming client
+func NewServersideClient(server *RtspServer, serverAddress string, serverPort string, videoFileName string) *RtspClient {
+	log.Println("[RTSP] serverside client started")
 
-		rtspClient.sendRequest(message.Setup)
-		replyCode := rtspClient.parseResponse()
+	rtspClient := &RtspClient{
+		videoFileName:    videoFileName,
+		state:            state.Init,
+		sequentialNumber: 1,
+	}
+
+	frameSync := video.NewFrameSync()
+	rtpReceiver := NewRtpReceiverWithServer(server, frameSync)
+	serverConnection, err := net.Dial("tcp", fmt.Sprintf("%v:%v", serverAddress, serverPort))
+	if err != nil {
+		log.Fatalln("[RTSP] cannot connect to the server:", err)
+	}
+
+	rtspClient.rtcpSender = NewRtcpSender(rtpReceiver)
+	rtspClient.frameSync = frameSync
+	rtspClient.rtpReceiver = rtpReceiver
+	rtspClient.serverConnection = serverConnection
+	rtspClient.isServerside = true
+
+	log.Println("[RTSP] connected with server.")
+	return rtspClient
+}
+
+func (rc *RtspClient) onSetup() {
+	log.Println("[GUI] setup button has been pressed.")
+	if rc.state == state.Init {
+		rc.sequentialNumber = 1
+
+		rc.sendRequest(message.Setup)
+		replyCode := rc.parseResponse()
 
 		if replyCode == "200" {
-			rtspClient.State = state.Ready
+			rc.state = state.Ready
 			log.Println("[RTSP] state change to READY")
 		}
 	}
 }
 
-func (rtspClient *RtspClient) onRecord() {
-	log.Println("[GUI] Record button has been pressed.")
+func (rc *RtspClient) onRecord() {
+	log.Println("[GUI] record button has been pressed.")
 
-	if rtspClient.State == state.Ready {
-		rtspClient.SequentialNumber = 1
+	if rc.state == state.Ready {
+		rc.sequentialNumber = 1
 
-		rtspClient.sendRequest(message.Record)
-		rtspClient.Server = NewSingleConnRtpServer()
+		rc.sendRequest(message.Record)
+		rc.server = NewClientsideServer()
 		log.Printf("[RTSP] received new connection from %v",
-			rtspClient.Server.ClientConnection.RemoteAddr().String())
+			rc.server.clientConnection.RemoteAddr().String())
 		// setup
-		rtspClient.Server.ParseRequest()
-		rtspClient.Server.SendResponse()
+		rc.server.ParseRequest()
+		rc.server.SendResponse()
 		// play
-		rtspClient.Server.ParseRequest()
-		rtspClient.Server.SendResponse()
-		replyCode := rtspClient.parseResponse()
+		rc.server.ParseRequest()
+		rc.server.SendResponse()
+		replyCode := rc.parseResponse()
 
 		if replyCode == "200" {
-			rtspClient.State = state.Ready
-			log.Println("[RTSP] state change to READY")
+			rc.state = state.Recording
+			log.Println("[RTSP] state change to RECORDING")
 
-			rtspClient.Broadcast = NewBroadcast(rtspClient.Server, rtspClient.FrameSync, rtspClient.View)
-
-			rtspClient.Broadcast.Start()
-			rtspClient.ImageRefresh.Interval = 33 * time.Millisecond
-			rtspClient.ImageRefresh.Start()
-			rtspClient.State = state.Playing
+			rc.broadcast = NewBroadcast(rc.server, rc.frameSync, rc.view)
+			rc.broadcast.Start()
 		}
-	} else if rtspClient.State == state.Playing {
-		// TODO make it protocol compatible
-		rtspClient.Broadcast.Stop()
-		rtspClient.ImageRefresh.Stop()
-		rtspClient.State = state.Ready
+	} else if rc.state == state.Recording {
+		rc.broadcast.Stop()
+		rc.state = state.Ready
 	}
 }
 
-func (rtspClient *RtspClient) onPlay() {
-	log.Println("[GUI] Play button has been pressed.")
+func (rc *RtspClient) onPlay() {
+	log.Println("[GUI] play button has been pressed.")
 
-	if rtspClient.State == state.Ready {
-		rtspClient.SequentialNumber++
-		rtspClient.RtpReceiver.StartTime = time.Now().UnixNano() / int64(time.Millisecond)
+	if rc.state == state.Ready {
+		rc.sequentialNumber++
+		rc.rtpReceiver.SetStartTime(time.Now().UnixNano() / int64(time.Millisecond))
 
-		rtspClient.sendRequest(message.Play)
-		replyCode := rtspClient.parseResponse()
+		rc.sendRequest(message.Play)
+		replyCode := rc.parseResponse()
 
 		if replyCode == "200" {
-			rtspClient.State = state.Playing
-			rtspClient.RtpReceiver.Start()
-			rtspClient.RtcpSender.Start()
-			rtspClient.ImageRefresh.Start()
-
+			rc.state = state.Playing
+			rc.rtpReceiver.Start()
+			rc.rtcpSender.Start()
+			if !rc.isServerside {
+				rc.imageRefresh.Start()
+			}
 			log.Println("[RTSP] state change to Playing")
 		}
 	}
 }
 
-func (rtspClient *RtspClient) onPause() {
-	log.Println("[GUI] Pause button has been pressed.")
+func (rc *RtspClient) onPause() {
+	log.Println("[GUI] pause button has been pressed.")
 
-	if rtspClient.State == state.Playing {
-		rtspClient.SequentialNumber++
+	if rc.state == state.Playing {
+		rc.sequentialNumber++
 
-		rtspClient.sendRequest(message.Pause)
-		replyCode := rtspClient.parseResponse()
+		rc.sendRequest(message.Pause)
+		replyCode := rc.parseResponse()
 
 		if replyCode == "200" {
-			rtspClient.State = state.Ready
-			rtspClient.RtpReceiver.Stop()
-			rtspClient.RtcpSender.Stop()
-			rtspClient.ImageRefresh.Stop()
+			rc.state = state.Ready
+			rc.rtpReceiver.Stop()
+			rc.rtcpSender.Stop()
+			rc.imageRefresh.Stop()
 
 			log.Println("[RTSP] state change to READY")
 		}
 	}
 }
 
-func (rtspClient *RtspClient) onDescribe() {
-	log.Println("[GUI] Describe button has been pressed.")
+func (rc *RtspClient) onDescribe() {
+	log.Println("[GUI] describe button has been pressed.")
 
-	rtspClient.SequentialNumber++
-	rtspClient.sendRequest(message.Describe)
-	replyCode := rtspClient.parseResponse()
+	rc.sequentialNumber++
+	rc.sendRequest(message.Describe)
+	replyCode := rc.parseResponse()
 
 	if replyCode == "200" {
-		log.Println("[RTSP] Received response for DESCRIBE")
+		log.Println("[RTSP] received response for DESCRIBE")
 	}
 }
 
-func (rtspClient *RtspClient) onTeardown() {
-	log.Println("[GUI] Teardown button has been pressed.")
+func (rc *RtspClient) onTeardown() {
+	log.Println("[GUI] teardown button has been pressed.")
 
-	rtspClient.SequentialNumber++
-	rtspClient.sendRequest(message.Teardown)
-	replyCode := rtspClient.parseResponse()
+	rc.sequentialNumber++
+	rc.sendRequest(message.Teardown)
+	replyCode := rc.parseResponse()
 
 	if replyCode == "200" {
-		rtspClient.State = state.Init
+		rc.state = state.Init
 
-		rtspClient.RtpReceiver.Stop()
-		rtspClient.RtcpSender.Stop()
-		rtspClient.ImageRefresh.Stop()
+		rc.rtpReceiver.Stop()
+		rc.rtcpSender.Stop()
+		rc.imageRefresh.Stop()
 
-		log.Println("[RTSP] new RTSP state INIT")
+		log.Println("[RTSP] new client state: INIT")
 	}
 }
 
-func (rtspClient *RtspClient) sendRequest(requestType message.Message) {
+func (rc *RtspClient) sendRequest(requestType message.Message) {
 	request := fmt.Sprintf("%v %v RTSP/1.0\r\nCSeq: %v\r\n",
-		requestType, rtspClient.VideoFileName, rtspClient.SequentialNumber)
+		requestType, rc.videoFileName, rc.sequentialNumber)
 
 	if requestType == message.Setup {
-		request += fmt.Sprintf("Transport: RTP/UDP; client_port= %v\r\n", rtspClient.RtpReceiver.ListeningPort)
+		request += fmt.Sprintf("Transport: RTP/UDP; client_port= %v\r\n", rc.rtpReceiver.listeningPort)
 	} else if requestType == message.Describe {
 		request += fmt.Sprintf("Accept: application/sdp\r\n")
 	} else {
-		request += fmt.Sprintf("Session: %v\r\n", rtspClient.SessionId)
+		request += fmt.Sprintf("Session: %v\r\n", rc.sessionId)
 	}
 
-	_, _ = rtspClient.ServerConnection.Write([]byte(request))
+	_, err := rc.serverConnection.Write([]byte(request))
+	if err != nil {
+		log.Fatalln("[RTSP] error while sending request to the server:", err)
+	}
 }
 
-func (rtspClient *RtspClient) parseResponse() string {
+func (rc *RtspClient) parseResponse() string {
 	log.Println("[RTSP] received response from server")
 
-	responseBytes := make([]byte, 10_000)
-	_, _ = rtspClient.ServerConnection.Read(responseBytes)
+	responseBytes := make([]byte, 10000)
+	_, err := rc.serverConnection.Read(responseBytes)
+	if err != nil {
+		log.Fatalln("[RTSP] error while reading response from server:", err)
+	}
 	responseLines := strings.Split(string(responseBytes), "\r\n")
 
 	// cut whitespace at the end after split
@@ -252,20 +248,23 @@ func (rtspClient *RtspClient) parseResponse() string {
 	replyCode := requestElements[1]
 	if replyCode == "200" {
 		thirdLineParam := requestElements[5]
-		if rtspClient.State == state.Init {
+		if rc.state == state.Init {
 			if thirdLineParam == "Session:" {
 				sessionId := requestElements[6]
-				rtspClient.SessionId = sessionId
+				rc.sessionId = sessionId
 			} else if thirdLineParam == "Frame-Period:" {
-				framePeriod, _ := strconv.Atoi(requestElements[6])
-				rtspClient.ImageRefresh.Interval = time.Duration(framePeriod) * time.Millisecond
-				//rtspClient.ImageRefresh.Interval = 33 * time.Millisecond
-				rtspClient.RtcpSender.InitConnection(requestElements[8])
+				if !rc.isServerside {
+					framePeriod, err := strconv.Atoi(requestElements[6])
+					if err != nil {
+						log.Fatalln("[RTSP] error while parsing server response:", err)
+					}
+					rc.imageRefresh.SetInterval(time.Duration(framePeriod) * time.Millisecond)
+				}
+				rc.rtcpSender.InitConnection(requestElements[8])
 			}
 		}
 	} else {
-		log.Printf("Server returned response with error code %v", replyCode)
+		log.Printf("[RTSP] server returned response with error code %v", replyCode)
 	}
-
 	return replyCode
 }

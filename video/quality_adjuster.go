@@ -3,6 +3,7 @@ package video
 import (
 	"bytes"
 	"image/jpeg"
+	"log"
 )
 
 type QualityAdjuster struct {
@@ -16,12 +17,18 @@ func NewQualityAdjuster() *QualityAdjuster {
 }
 
 func (it *QualityAdjuster) Compress(image []byte) []byte {
-	decodedImage, _ := jpeg.Decode(bytes.NewBuffer(image))
+	decodedImage, err := jpeg.Decode(bytes.NewBuffer(image))
+	if err != nil {
+		log.Fatalln("[ERRPR] cannot decode frame from jpeg:", err)
+	}
 
 	buffer := make([]byte, 0)
 	encodedImage := bytes.NewBuffer(buffer)
 
-	_ = jpeg.Encode(encodedImage, decodedImage, &jpeg.Options{Quality: it.CompressionQuality})
+	err = jpeg.Encode(encodedImage, decodedImage, &jpeg.Options{Quality: it.CompressionQuality})
+	if err != nil {
+		log.Fatalln("[ERRPR] cannot encode frame to jpeg:", err)
+	}
 	return encodedImage.Bytes()
 }
 
