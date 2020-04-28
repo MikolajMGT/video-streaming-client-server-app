@@ -1,7 +1,7 @@
 package large_udp
 
 import (
-	"fmt"
+	"log"
 	"net"
 )
 
@@ -70,8 +70,7 @@ func (luc *LargeUdpPack) ReadFrom(b []byte) (int, bool, error) {
 	}
 
 	if packet.Header.CoSeqNumSize > 1 {
-		fmt.Println("Performed join")
+		log.Println("Performed join")
 	}
-	fmt.Println("map", len(luc.packetsToJoin))
 	return nTotal, false, nil
 }

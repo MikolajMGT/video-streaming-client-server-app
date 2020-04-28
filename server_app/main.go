@@ -7,6 +7,7 @@ import (
 	"os"
 	"streming_server/components"
 	"streming_server/protocol/rtp"
+	"streming_server/protocol/rtsp/state"
 	"sync"
 )
 
@@ -32,8 +33,7 @@ func main() {
 				func(k, v interface{}) bool {
 					srv := k.(*components.RtspServer)
 					privateChan := v.(chan *rtp.Packet)
-					// skip sending packet to yourself
-					if !srv.IsStreaming {
+					if srv.State == state.Playing {
 						privateChan <- packet
 					}
 					return true

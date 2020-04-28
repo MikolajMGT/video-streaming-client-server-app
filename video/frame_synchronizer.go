@@ -15,7 +15,7 @@ func NewFrameSync() *FrameSync {
 	return &FrameSync{
 		FramesQueue:   goconcurrentqueue.NewFIFO(),
 		FramePeriod:   33,
-		CurrentSeqNum: 1,
+		CurrentSeqNum: 0,
 	}
 }
 

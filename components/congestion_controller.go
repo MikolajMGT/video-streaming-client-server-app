@@ -10,7 +10,6 @@ import (
 
 const DefaultCongestionInterval = 400
 
-// TODO adjust to client streaming mechanism (temporarily disabled due to lack of compatibility)
 type CongestionController struct {
 	ticker              *time.Ticker
 	rtpSender           *RtpSender

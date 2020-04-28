@@ -17,7 +17,8 @@ type RtcpReceiver struct {
 	congestionLevel int
 	buffer          []byte
 	doneCheck       chan bool
-	ServerAddress   string
+	started         bool
+	ServerPort      string
 }
 
 func NewRtcpReceiver(clientAddress net.Addr) *RtcpReceiver {
@@ -27,7 +28,7 @@ func NewRtcpReceiver(clientAddress net.Addr) *RtcpReceiver {
 	if err != nil {
 		log.Fatalln("[RTCP] error while opening connection:", err)
 	}
-	serverAddress := udpConn.LocalAddr().String()
+	serverPort := strings.Split(udpConn.LocalAddr().String(), ":")[1]
 
 	return &RtcpReceiver{
 		interval:        DefaultRtcpInterval * time.Millisecond,
@@ -35,7 +36,7 @@ func NewRtcpReceiver(clientAddress net.Addr) *RtcpReceiver {
 		buffer:          make([]byte, 24),
 		doneCheck:       make(chan bool),
 		congestionLevel: util.NoCongestion,
-		ServerAddress:   serverAddress,
+		ServerPort:      serverPort,
 	}
 }
 
@@ -52,7 +53,9 @@ func (r *RtcpReceiver) receive() {
 }
 
 func (r *RtcpReceiver) Start() {
+	r.started = true
 	r.ticker = time.NewTicker(r.interval)
+	r.doneCheck = make(chan bool)
 
 	go func() {
 		for {
@@ -67,6 +70,9 @@ func (r *RtcpReceiver) Start() {
 }
 
 func (r *RtcpReceiver) Stop() {
-	r.doneCheck <- true
-	r.ticker.Stop()
+	if r.started {
+		close(r.doneCheck)
+		r.ticker.Stop()
+		r.started = false
+	}
 }

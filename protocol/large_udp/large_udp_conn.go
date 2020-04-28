@@ -1,7 +1,7 @@
 package large_udp
 
 import (
-	"fmt"
+	"log"
 	"math"
 	"net"
 )
@@ -43,7 +43,7 @@ func (luc *LargeUdpConn) Write(data []byte) (int, error) {
 		return n, err
 	}
 
-	fmt.Println("Performed split")
+	log.Println("Performed split")
 
 	coSeqNums := make([]uint16, packetsNumber)
 	for i := 0; i < packetsNumber; i++ {

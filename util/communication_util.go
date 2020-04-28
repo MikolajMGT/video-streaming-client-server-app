@@ -2,6 +2,7 @@ package util
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -27,8 +28,8 @@ func PrepareDescribeResponse(sequentialNumber int, rtspDestinationPort string, m
 	return fmt.Sprint(FormatHeader(sequentialNumber), content, control)
 }
 
-func PrepareSetupResponse(sequentialNumber int, framePeriod int, serverAddress string) string {
-	content := fmt.Sprintf("Frame-Period: %v\r\nServer-Address: %v\r\n", framePeriod, serverAddress)
+func PrepareSetupResponse(sequentialNumber int, serverPort string) string {
+	content := fmt.Sprintf("Transport: server_port=%v\r\n", serverPort)
 	return fmt.Sprint(FormatHeader(sequentialNumber), content)
 }
 
@@ -45,4 +46,15 @@ func ReadRequestElements(bufferedReader *bufio.Reader) []string {
 		log.Println("\t[RTSP message]", requestLine)
 	}
 	return strings.Split(request, " ")
+}
+
+func ParseParameter(text string, parameterName string) (string, error) {
+	transportOptions := strings.Split(text, ";")
+	for _, option := range transportOptions {
+		if strings.HasPrefix(option, parameterName) {
+			port := strings.Split(option, "=")[1]
+			return port, nil
+		}
+	}
+	return "", errors.New("unable to parse parameter")
 }

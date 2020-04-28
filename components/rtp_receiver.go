@@ -40,17 +40,13 @@ func NewRtpReceiver(frameSync *video.FrameSync, view *ui.View) *RtpReceiver {
 	largeUdpCon := large_udp.NewLargeUdpPackWithSize(udpConn, 64000)
 
 	return &RtpReceiver{
-		frameSync:      frameSync,
-		view:           view,
-		interval:       DefaultRtpInterval * time.Millisecond,
-		udpCon:         largeUdpCon,
-		doneCheck:      make(chan bool),
-		expectedSeqNum: 0,
-		totalBytes:     0,
-		totalPlayTime:  0,
-		startTime:      0,
-		started:        false,
-		listeningPort:  listeningPort,
+		frameSync:     frameSync,
+		view:          view,
+		interval:      DefaultRtpInterval * time.Millisecond,
+		udpCon:        largeUdpCon,
+		doneCheck:     make(chan bool),
+		started:       false,
+		listeningPort: listeningPort,
 	}
 }
 
@@ -135,7 +131,6 @@ func (r *RtpReceiver) receiveAndForward() {
 	}
 
 	r.totalBytes += len(rtpPacket.Payload)
-
 	r.server.mainChannel <- rtpPacket
 }
 

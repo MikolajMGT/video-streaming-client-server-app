@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"strconv"
 	"streming_server/protocol/rtsp/message"
 	"streming_server/protocol/rtsp/state"
 	"streming_server/ui"
+	"streming_server/util"
 	"streming_server/video"
 	"strings"
 	"time"
@@ -100,39 +100,34 @@ func (rc *RtspClient) onSetup() {
 
 		if replyCode == "200" {
 			rc.state = state.Ready
-			log.Println("[RTSP] state change to READY")
+			log.Println("[RTSP] State change to READY")
 		}
 	}
 }
 
 func (rc *RtspClient) onRecord() {
 	log.Println("[GUI] record button has been pressed.")
-
 	if rc.state == state.Ready {
-		rc.sequentialNumber = 1
-
 		rc.sendRequest(message.Record)
-		rc.server = NewClientsideServer()
-		log.Printf("[RTSP] received new connection from %v",
-			rc.server.clientConnection.RemoteAddr().String())
-		// setup
-		rc.server.ParseRequest()
-		rc.server.SendResponse()
-		// play
-		rc.server.ParseRequest()
-		rc.server.SendResponse()
-		replyCode := rc.parseResponse()
-
-		if replyCode == "200" {
-			rc.state = state.Recording
-			log.Println("[RTSP] state change to RECORDING")
+		if rc.server == nil {
+			rc.server = NewClientsideServer()
+			log.Printf("[RTSP] received new connection from %v",
+				rc.server.clientConnection.RemoteAddr().String())
+			// setup
+			rc.server.ParseRequest()
+			rc.server.SendResponse()
 
 			rc.broadcast = NewBroadcast(rc.server, rc.frameSync, rc.view)
-			rc.broadcast.Start()
 		}
-	} else if rc.state == state.Recording {
-		rc.broadcast.Stop()
-		rc.state = state.Ready
+		replyCode := rc.parseResponse()
+		if replyCode == "200" {
+			// play
+			rc.server.ParseRequest()
+			rc.server.SendResponse()
+			rc.broadcast.Start()
+			rc.state = state.Recording
+			log.Println("[RTSP] State change to RECORDING")
+		}
 	}
 }
 
@@ -153,7 +148,7 @@ func (rc *RtspClient) onPlay() {
 			if !rc.isServerside {
 				rc.imageRefresh.Start()
 			}
-			log.Println("[RTSP] state change to Playing")
+			log.Println("[RTSP] State change to Playing")
 		}
 	}
 }
@@ -171,9 +166,23 @@ func (rc *RtspClient) onPause() {
 			rc.state = state.Ready
 			rc.rtpReceiver.Stop()
 			rc.rtcpSender.Stop()
-			rc.imageRefresh.Stop()
+			if rc.imageRefresh != nil {
+				rc.imageRefresh.Stop()
+			}
 
-			log.Println("[RTSP] state change to READY")
+			log.Println("[RTSP] State change to READY")
+		}
+	} else if rc.state == state.Recording {
+		rc.sendRequest(message.Pause)
+		// pause
+		rc.server.ParseRequest()
+		rc.server.SendResponse()
+
+		replyCode := rc.parseResponse()
+		if replyCode == "200" {
+			rc.state = state.Ready
+			rc.broadcast.Stop()
+			log.Println("[RTSP] State change to READY")
 		}
 	}
 }
@@ -204,7 +213,7 @@ func (rc *RtspClient) onTeardown() {
 		rc.rtcpSender.Stop()
 		rc.imageRefresh.Stop()
 
-		log.Println("[RTSP] new client state: INIT")
+		log.Println("[RTSP] new client State: INIT")
 	}
 }
 
@@ -213,7 +222,7 @@ func (rc *RtspClient) sendRequest(requestType message.Message) {
 		requestType, rc.videoFileName, rc.sequentialNumber)
 
 	if requestType == message.Setup {
-		request += fmt.Sprintf("Transport: RTP/UDP; client_port= %v\r\n", rc.rtpReceiver.listeningPort)
+		request += fmt.Sprintf("Transport: RTP/UDP;client_port=%v\r\n", rc.rtpReceiver.listeningPort)
 	} else if requestType == message.Describe {
 		request += fmt.Sprintf("Accept: application/sdp\r\n")
 	} else {
@@ -252,15 +261,14 @@ func (rc *RtspClient) parseResponse() string {
 			if thirdLineParam == "Session:" {
 				sessionId := requestElements[6]
 				rc.sessionId = sessionId
-			} else if thirdLineParam == "Frame-Period:" {
+			} else if thirdLineParam == "Transport:" {
 				if !rc.isServerside {
-					framePeriod, err := strconv.Atoi(requestElements[6])
-					if err != nil {
-						log.Fatalln("[RTSP] error while parsing server response:", err)
-					}
-					rc.imageRefresh.SetInterval(time.Duration(framePeriod) * time.Millisecond)
+					rc.imageRefresh.SetInterval(time.Duration(33) * time.Millisecond)
 				}
-				rc.rtcpSender.InitConnection(requestElements[8])
+				port, err := util.ParseParameter(requestElements[6], "server_port")
+				if err == nil {
+					rc.rtcpSender.InitConnection(port)
+				}
 			}
 		}
 	} else {
