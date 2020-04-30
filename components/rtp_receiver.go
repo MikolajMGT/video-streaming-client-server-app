@@ -64,6 +64,11 @@ func (r *RtpReceiver) receive() {
 	log.Println("[RTP] received packet")
 	buf := make([]byte, 300000)
 	packetLength, full, err := r.udpCon.ReadFrom(buf)
+
+	if packetLength == 0 {
+		return
+	}
+
 	if err != nil {
 		log.Println("[RTP] error while reading packet:", err)
 	}
@@ -160,5 +165,13 @@ func (r *RtpReceiver) Stop() {
 		close(r.doneCheck)
 		r.ticker.Stop()
 		r.started = false
+	}
+}
+
+func (r *RtpReceiver) Close() {
+	r.Stop()
+	err := r.udpCon.Close()
+	if err != nil {
+		log.Println("[RTP] error while closing connection:", err)
 	}
 }

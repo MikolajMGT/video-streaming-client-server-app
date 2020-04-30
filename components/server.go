@@ -25,6 +25,7 @@ type RtspServer struct {
 	State                state.State
 	mainChannel          chan *rtp.Packet
 	privateChannel       chan *rtp.Packet
+	clientsideServerPort string
 	videoFileName        string
 	sessionId            string
 	sequentialNumber     int
@@ -46,9 +47,9 @@ func NewServer(clientConnection net.Conn, mainChannel chan *rtp.Packet, privateC
 }
 
 // used when client is currently streaming video
-func NewClientsideServer() *RtspServer {
+func NewClientsideServer(port int) *RtspServer {
 	log.Println("[RTSP] clientside server started")
-	listener, err := net.Listen("tcp", fmt.Sprint(":", 26000))
+	listener, err := net.Listen("tcp", fmt.Sprint("localhost:", port))
 	if err != nil {
 		log.Fatalln("[RTSP] cannot open connection:", err)
 	}
@@ -78,15 +79,15 @@ func (srv *RtspServer) Start() {
 	// waiting for initial SETUP request
 	for {
 		requestType := srv.ParseRequest()
-		if requestType == message.Setup || requestType == message.Exit {
+		if requestType == message.Setup || srv.State == state.Detached {
 			break
 		}
 	}
 
 	// handling further requests
 	for {
-		requestType := srv.ParseRequest()
-		if requestType == message.Exit {
+		srv.ParseRequest()
+		if srv.State == state.Detached {
 			srv.ShutDown()
 			break
 		}
@@ -96,7 +97,14 @@ func (srv *RtspServer) Start() {
 func (srv *RtspServer) ShutDown() {
 	if srv.componentsStarted {
 		srv.congestionController.Stop()
-		srv.rtpSender.Stop()
+		srv.rtpSender.Close()
+		err := srv.clientConnection.Close()
+		if err != nil {
+			log.Println("[RTSP] error while closing connection:", err)
+		}
+		if srv.recvClient != nil {
+			srv.recvClient.onTeardown()
+		}
 	}
 }
 
@@ -104,7 +112,9 @@ func (srv *RtspServer) ParseRequest() message.Message {
 	bufferedReader := bufio.NewReader(srv.clientConnection)
 	requestElements := util.ReadRequestElements(bufferedReader)
 	if len(requestElements) == 0 {
-		return message.Exit
+		// client disconnected
+		srv.State = state.Detached
+		return ""
 	}
 
 	requestType := requestElements[0]
@@ -115,10 +125,11 @@ func (srv *RtspServer) ParseRequest() message.Message {
 	srv.sequentialNumber = seqNumber
 	if requestType == message.Setup {
 		fileName := requestElements[1]
-		port, err := util.ParseParameter(requestElements[6], "client_port")
+		ports, err := util.ParseParameter(requestElements[6], "client_port")
 		if err == nil {
-			portAsInt, _ := strconv.Atoi(port)
+			portAsInt, _ := strconv.Atoi(ports[0])
 			srv.OnSetup(portAsInt)
+			srv.clientsideServerPort = ports[1]
 
 		}
 		srv.videoFileName = fileName
@@ -164,7 +175,8 @@ func (srv *RtspServer) OnSetup(rtpDestinationPort int) {
 func (srv *RtspServer) onRecord() {
 	if srv.State == state.Ready {
 		if srv.recvClient == nil {
-			srv.recvClient = NewServersideClient(srv, "127.0.0.1", "26000", "livestream")
+			srv.recvClient = NewServersideClient(srv, "localhost",
+				srv.clientsideServerPort, "livestream")
 			srv.recvClient.onSetup()
 			srv.IsStreaming = true
 		}

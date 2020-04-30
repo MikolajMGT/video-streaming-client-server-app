@@ -110,6 +110,15 @@ func (s *RtpSender) Stop() {
 	}
 }
 
+func (s *RtpSender) Close() {
+	s.Stop()
+	s.rtcpReceiver.Close()
+	err := s.clientConnection.Close()
+	if err != nil {
+		log.Println("[RTP] error while closing connection:", err)
+	}
+}
+
 func (s *RtpSender) UpdateInterval(newInterval time.Duration) {
 	s.ticker.Stop()
 	s.ticker = time.NewTicker(newInterval)

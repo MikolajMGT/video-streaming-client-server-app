@@ -14,15 +14,6 @@ type LargeUdpPack struct {
 	packetsToJoin map[uint16][]byte
 }
 
-func NewLargeUdpPack(udpConn net.PacketConn) *LargeUdpPack {
-	return &LargeUdpPack{
-		UdpPack:       udpConn,
-		PacketSize:    DefaultPacketSize,
-		CurrSeqNum:    1,
-		packetsToJoin: make(map[uint16][]byte),
-	}
-}
-
 func NewLargeUdpPackWithSize(udpConn net.PacketConn, desiredPacketSize int) *LargeUdpPack {
 	return &LargeUdpPack{
 		UdpPack:       udpConn,
@@ -35,6 +26,11 @@ func NewLargeUdpPackWithSize(udpConn net.PacketConn, desiredPacketSize int) *Lar
 func (luc *LargeUdpPack) ReadFrom(b []byte) (int, bool, error) {
 	buffer := make([]byte, 65507)
 	n, _, err := luc.UdpPack.ReadFrom(buffer)
+
+	if n == 0 {
+		return 0, true, nil
+	}
+
 	buffer = buffer[:n]
 
 	packet := NewPacketFromBytes(buffer)
@@ -70,7 +66,11 @@ func (luc *LargeUdpPack) ReadFrom(b []byte) (int, bool, error) {
 	}
 
 	if packet.Header.CoSeqNumSize > 1 {
-		log.Println("Performed join")
+		log.Println("[LU] performed packet join")
 	}
 	return nTotal, false, nil
+}
+
+func (luc *LargeUdpPack) Close() error {
+	return luc.UdpPack.Close()
 }

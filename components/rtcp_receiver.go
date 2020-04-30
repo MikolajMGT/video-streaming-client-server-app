@@ -13,7 +13,7 @@ import (
 type RtcpReceiver struct {
 	ticker          *time.Ticker
 	interval        time.Duration
-	udpCon          *net.PacketConn
+	udpCon          net.PacketConn
 	congestionLevel int
 	buffer          []byte
 	doneCheck       chan bool
@@ -32,7 +32,7 @@ func NewRtcpReceiver(clientAddress net.Addr) *RtcpReceiver {
 
 	return &RtcpReceiver{
 		interval:        DefaultRtcpInterval * time.Millisecond,
-		udpCon:          &udpConn,
+		udpCon:          udpConn,
 		buffer:          make([]byte, 24),
 		doneCheck:       make(chan bool),
 		congestionLevel: util.NoCongestion,
@@ -41,7 +41,7 @@ func NewRtcpReceiver(clientAddress net.Addr) *RtcpReceiver {
 }
 
 func (r *RtcpReceiver) receive() {
-	_, _, err := (*r.udpCon).ReadFrom(r.buffer)
+	_, _, err := r.udpCon.ReadFrom(r.buffer)
 	if err != nil {
 		log.Println("[RTCP] error while reading packet:", err)
 		return
@@ -74,5 +74,13 @@ func (r *RtcpReceiver) Stop() {
 		close(r.doneCheck)
 		r.ticker.Stop()
 		r.started = false
+	}
+}
+
+func (r *RtcpReceiver) Close() {
+	r.Stop()
+	err := r.udpCon.Close()
+	if err != nil {
+		log.Println("[RTCP] error while closing connection:", err)
 	}
 }

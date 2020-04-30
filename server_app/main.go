@@ -35,6 +35,8 @@ func main() {
 					privateChan := v.(chan *rtp.Packet)
 					if srv.State == state.Playing {
 						privateChan <- packet
+					} else if srv.State == state.Detached {
+						serverMap.Delete(srv)
 					}
 					return true
 				},

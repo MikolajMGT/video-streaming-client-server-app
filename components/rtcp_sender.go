@@ -89,3 +89,11 @@ func (s *RtcpSender) Stop() {
 		s.started = false
 	}
 }
+
+func (s *RtcpSender) Close() {
+	s.Stop()
+	err := s.serverConnection.Close()
+	if err != nil {
+		log.Println("[RTCP] error while closing connection:", err)
+	}
+}

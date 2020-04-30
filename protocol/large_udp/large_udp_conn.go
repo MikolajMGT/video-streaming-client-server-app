@@ -6,20 +6,10 @@ import (
 	"net"
 )
 
-const DefaultPacketSize = 512
-
 type LargeUdpConn struct {
 	UdpConn    *net.UDPConn
 	PacketSize int
 	CurrSeqNum uint16
-}
-
-func NewLargeUdpConn(udpConn *net.UDPConn) *LargeUdpConn {
-	return &LargeUdpConn{
-		UdpConn:    udpConn,
-		PacketSize: DefaultPacketSize,
-		CurrSeqNum: 1,
-	}
 }
 
 func NewLargeUdpConnWithSize(udpConn *net.UDPConn, desiredPacketSize int) *LargeUdpConn {
@@ -43,7 +33,7 @@ func (luc *LargeUdpConn) Write(data []byte) (int, error) {
 		return n, err
 	}
 
-	log.Println("Performed split")
+	log.Println("[LU] performed packet split")
 
 	coSeqNums := make([]uint16, packetsNumber)
 	for i := 0; i < packetsNumber; i++ {
@@ -71,4 +61,8 @@ func (luc *LargeUdpConn) Write(data []byte) (int, error) {
 	}
 
 	return nTotal, nil
+}
+
+func (luc *LargeUdpConn) Close() error {
+	return luc.UdpConn.Close()
 }

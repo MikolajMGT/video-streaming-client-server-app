@@ -7,7 +7,6 @@ const (
 	Pause    = "PAUSE"
 	Teardown = "TEARDOWN"
 	Describe = "DESCRIBE"
-	Exit     = "EXIT"
 )
 
 type Message string

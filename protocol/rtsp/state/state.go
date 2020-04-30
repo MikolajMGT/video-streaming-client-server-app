@@ -1,10 +1,14 @@
 package state
 
 const (
-	Init      = 0
-	Ready     = 1
-	Playing   = 2
-	Recording = 3
+	// only for internal thread management - not protocol compatible
+	Detached = -1
+
+	// protocol states
+	Init = iota
+	Ready
+	Playing
+	Recording
 )
 
 type State int

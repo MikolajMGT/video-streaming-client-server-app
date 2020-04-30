@@ -63,6 +63,10 @@ func (view *View) InitView() {
 			),
 		),
 	)
+
+	view.Window.SetOnClosed(func() {
+		view.onTeardown()
+	})
 }
 
 func (view *View) StartGUI() {

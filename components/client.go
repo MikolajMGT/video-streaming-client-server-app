@@ -2,6 +2,7 @@ package components
 
 import (
 	"fmt"
+	"github.com/phayes/freeport"
 	"log"
 	"net"
 	"streming_server/protocol/rtsp/message"
@@ -14,19 +15,20 @@ import (
 )
 
 type RtspClient struct {
-	server           *RtspServer
-	rtcpSender       *RtcpSender
-	rtpReceiver      *RtpReceiver
-	imageRefresh     *ImageRefresh
-	frameSync        *video.FrameSync
-	broadcast        *Broadcast
-	view             *ui.View
-	serverConnection net.Conn
-	state            state.State
-	videoFileName    string
-	sessionId        string
-	sequentialNumber int
-	isServerside     bool
+	server            *RtspServer
+	rtcpSender        *RtcpSender
+	rtpReceiver       *RtpReceiver
+	imageRefresh      *ImageRefresh
+	frameSync         *video.FrameSync
+	broadcast         *Broadcast
+	view              *ui.View
+	serverConnection  net.Conn
+	state             state.State
+	clientsideSrvPort int
+	videoFileName     string
+	sessionId         string
+	sequentialNumber  int
+	isServerside      bool
 }
 
 func NewClient(serverAddress string, serverPort string, videoFileName string) *RtspClient {
@@ -86,7 +88,6 @@ func NewServersideClient(server *RtspServer, serverAddress string, serverPort st
 	rtspClient.serverConnection = serverConnection
 	rtspClient.isServerside = true
 
-	log.Println("[RTSP] connected with server.")
 	return rtspClient
 }
 
@@ -110,7 +111,7 @@ func (rc *RtspClient) onRecord() {
 	if rc.state == state.Ready {
 		rc.sendRequest(message.Record)
 		if rc.server == nil {
-			rc.server = NewClientsideServer()
+			rc.server = NewClientsideServer(rc.clientsideSrvPort)
 			log.Printf("[RTSP] received new connection from %v",
 				rc.server.clientConnection.RemoteAddr().String())
 			// setup
@@ -209,9 +210,18 @@ func (rc *RtspClient) onTeardown() {
 	if replyCode == "200" {
 		rc.state = state.Init
 
-		rc.rtpReceiver.Stop()
-		rc.rtcpSender.Stop()
 		rc.imageRefresh.Stop()
+		rc.rtpReceiver.Close()
+		rc.rtcpSender.Close()
+
+		err := rc.serverConnection.Close()
+		if err != nil {
+			log.Println("[RTSP] error while closing connection:", err)
+		}
+
+		if rc.server != nil {
+			rc.server.ShutDown()
+		}
 
 		log.Println("[RTSP] new client State: INIT")
 	}
@@ -222,7 +232,13 @@ func (rc *RtspClient) sendRequest(requestType message.Message) {
 		requestType, rc.videoFileName, rc.sequentialNumber)
 
 	if requestType == message.Setup {
-		request += fmt.Sprintf("Transport: RTP/UDP;client_port=%v\r\n", rc.rtpReceiver.listeningPort)
+		clientsideServerPort, err := freeport.GetFreePort()
+		if err != nil {
+			log.Fatalln("[RTSP] cannot allocate free port:", err)
+		}
+		rc.clientsideSrvPort = clientsideServerPort
+		request += fmt.Sprintf("Transport: RTP/UDP;client_port=%v,%v\r\n",
+			rc.rtpReceiver.listeningPort, rc.clientsideSrvPort)
 	} else if requestType == message.Describe {
 		request += fmt.Sprintf("Accept: application/sdp\r\n")
 	} else {
@@ -265,9 +281,9 @@ func (rc *RtspClient) parseResponse() string {
 				if !rc.isServerside {
 					rc.imageRefresh.SetInterval(time.Duration(33) * time.Millisecond)
 				}
-				port, err := util.ParseParameter(requestElements[6], "server_port")
+				ports, err := util.ParseParameter(requestElements[6], "server_port")
 				if err == nil {
-					rc.rtcpSender.InitConnection(port)
+					rc.rtcpSender.InitConnection(ports[0])
 				}
 			}
 		}

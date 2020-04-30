@@ -48,13 +48,14 @@ func ReadRequestElements(bufferedReader *bufio.Reader) []string {
 	return strings.Split(request, " ")
 }
 
-func ParseParameter(text string, parameterName string) (string, error) {
+func ParseParameter(text string, parameterName string) ([]string, error) {
 	transportOptions := strings.Split(text, ";")
 	for _, option := range transportOptions {
 		if strings.HasPrefix(option, parameterName) {
-			port := strings.Split(option, "=")[1]
-			return port, nil
+			value := strings.Split(option, "=")[1]
+			ports := strings.Split(value, ",")
+			return ports, nil
 		}
 	}
-	return "", errors.New("unable to parse parameter")
+	return make([]string, 0), errors.New("unable to parse parameter")
 }
