@@ -8,9 +8,9 @@ import (
 	"strings"
 )
 
-func FormatHeader(sequentialNumber int) string {
+func FormatHeader(sequentialNumber int, sessionId string) string {
 	return fmt.Sprintf(
-		"RTSP/1.0 200 OK\r\nCSeq: %v\r\n", sequentialNumber,
+		"RTSP/1.0 200 OK\r\nCSeq: %v\r\nSession: %v\r\n", sequentialNumber, sessionId,
 	)
 }
 
@@ -25,12 +25,12 @@ func PrepareDescribeResponse(sequentialNumber int, rtspDestinationPort string, m
 	content := fmt.Sprintf("Content-Base: %v\r\nContent-Type: application/sdp\r\nContent-Length: %v\r\n",
 		videoFileName, len(control),
 	)
-	return fmt.Sprint(FormatHeader(sequentialNumber), content, control)
+	return fmt.Sprint(FormatHeader(sequentialNumber, sessionId), content, control)
 }
 
-func PrepareSetupResponse(sequentialNumber int, serverPort string) string {
+func PrepareSetupResponse(sequentialNumber int, serverPort string, sessionId string) string {
 	content := fmt.Sprintf("Transport: server_port=%v\r\n", serverPort)
-	return fmt.Sprint(FormatHeader(sequentialNumber), content)
+	return fmt.Sprint(FormatHeader(sequentialNumber, sessionId), content)
 }
 
 func ReadRequestElements(bufferedReader *bufio.Reader) []string {

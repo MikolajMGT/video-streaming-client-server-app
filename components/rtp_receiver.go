@@ -3,7 +3,6 @@ package components
 import (
 	"log"
 	"net"
-	"streming_server/protocol/large_udp"
 	"streming_server/protocol/rtp"
 	"streming_server/ui"
 	"streming_server/video"
@@ -19,7 +18,7 @@ type RtpReceiver struct {
 	view              *ui.View
 	ticker            *time.Ticker
 	interval          time.Duration
-	udpCon            *large_udp.LargeUdpPack
+	udpCon            net.PacketConn
 	highestRecvSeqNum int
 	cumulativeLost    int
 	expectedSeqNum    int
@@ -37,13 +36,12 @@ func NewRtpReceiver(frameSync *video.FrameSync, view *ui.View) *RtpReceiver {
 		log.Fatalln("[RTP] cannot make rtp connection:", err)
 	}
 	listeningPort := strings.Split(udpConn.LocalAddr().String(), ":")[1]
-	largeUdpCon := large_udp.NewLargeUdpPackWithSize(udpConn, 64000)
 
 	return &RtpReceiver{
 		frameSync:     frameSync,
 		view:          view,
 		interval:      DefaultRtpInterval * time.Millisecond,
-		udpCon:        largeUdpCon,
+		udpCon:        udpConn,
 		doneCheck:     make(chan bool),
 		started:       false,
 		listeningPort: listeningPort,
@@ -62,8 +60,8 @@ func (r *RtpReceiver) SetStartTime(startTime int64) {
 
 func (r *RtpReceiver) receive() {
 	log.Println("[RTP] received packet")
-	buf := make([]byte, 300000)
-	packetLength, full, err := r.udpCon.ReadFrom(buf)
+	buf := make([]byte, 65507)
+	packetLength, _, err := r.udpCon.ReadFrom(buf)
 
 	if packetLength == 0 {
 		return
@@ -74,17 +72,13 @@ func (r *RtpReceiver) receive() {
 	}
 	buf = buf[:packetLength]
 
-	if !full {
-		return
-	}
+	rtpPacket := rtp.NewPacketFromBytes(buf, packetLength)
+	rtpPacket.Header.Log()
 
 	//current unix time in milliseconds
 	currentTime := time.Now().UnixNano() / int64(time.Millisecond)
 	r.totalPlayTime += currentTime - r.startTime
 	r.startTime = currentTime
-
-	rtpPacket := rtp.NewPacketFromBytes(buf, packetLength)
-	rtpPacket.Header.Log()
 
 	r.expectedSeqNum++
 	if rtpPacket.Header.SequenceNumber > r.highestRecvSeqNum {
@@ -108,16 +102,17 @@ func (r *RtpReceiver) receive() {
 func (r *RtpReceiver) receiveAndForward() {
 	log.Println("[rtp] received and forwarded rtp packet")
 
-	buf := make([]byte, 300000)
-	packetLength, full, err := r.udpCon.ReadFrom(buf)
+	buf := make([]byte, 65507)
+	packetLength, _, err := r.udpCon.ReadFrom(buf)
 	if err != nil {
 		log.Println("[RTP] error while reading packet:", err)
 	}
-	buf = buf[:packetLength]
 
-	if !full {
+	if packetLength == 0 {
 		return
 	}
+
+	buf = buf[:packetLength]
 
 	//current unix time in milliseconds
 	currentTime := time.Now().UnixNano() / int64(time.Millisecond)

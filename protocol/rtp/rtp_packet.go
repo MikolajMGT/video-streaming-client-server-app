@@ -15,34 +15,26 @@ func NewPacket(rtpHeader *Header, payloadSize int, payload []byte) *Packet {
 }
 
 func NewPacketFromBytes(packetAsBytes []byte, packetSize int) *Packet {
-	headerBytes := packetAsBytes[:12]
+	headerBytes := packetAsBytes[:HeaderSize]
 	header := NewHeaderFromBytes(headerBytes)
 
 	return &Packet{
 		Header:      header,
 		PayloadSize: packetSize - HeaderSize,
-		Payload:     packetAsBytes[12:packetSize],
+		Payload:     packetAsBytes[HeaderSize:packetSize],
 	}
 }
 
-func (packet Packet) TransformToBytes() []byte {
-	result := make([]byte, HeaderSize+len(packet.Payload))
+func (packet *Packet) TransformToBytes() []byte {
+	result := make([]byte, 0, HeaderSize+len(packet.Payload))
 	headerAsBytes := packet.Header.TransformToBytes()
 
-	var currentIndex int
-	for index, item := range headerAsBytes {
-		result[index] = item
-		currentIndex = index + 1
-	}
-
-	for _, item := range packet.Payload {
-		result[currentIndex] = item
-		currentIndex++
-	}
+	result = append(result[0:HeaderSize], headerAsBytes...)
+	result = append(result[HeaderSize:], packet.Payload...)
 
 	return result
 }
 
-func (packet Packet) getLength() int {
+func (packet *Packet) getLength() int {
 	return HeaderSize + len(packet.Payload)
 }

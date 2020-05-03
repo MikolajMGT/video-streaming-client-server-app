@@ -35,23 +35,6 @@ func NewHeader(payloadType int, sequenceNumber int, timestamp int) *Header {
 	}
 }
 
-func (header Header) TransformToBytes() [HeaderSize]byte {
-	return [HeaderSize]byte{
-		byte(header.Version<<6 | header.Padding<<5 | header.Extension<<4 | header.CsrcCount),
-		byte(header.Marker<<7 | header.PayloadType),
-		byte(header.SequenceNumber >> 8),
-		byte(header.SequenceNumber & 0xFF),
-		byte(header.Timestamp >> 24),
-		byte(header.Timestamp >> 16),
-		byte(header.Timestamp >> 8),
-		byte(header.Timestamp & 0xFF),
-		byte(header.Ssrc >> 24),
-		byte(header.Ssrc >> 16),
-		byte(header.Ssrc >> 8),
-		byte(header.Ssrc & 0xFF),
-	}
-}
-
 func NewHeaderFromBytes(payload []byte) *Header {
 	resultRtpHeader := &Header{}
 	headerAsBytes := payload[:HeaderSize]
@@ -74,7 +57,24 @@ func NewHeaderFromBytes(payload []byte) *Header {
 	return resultRtpHeader
 }
 
-func (header Header) Log() {
+func (header *Header) TransformToBytes() []byte {
+	return []byte{
+		byte(header.Version<<6 | header.Padding<<5 | header.Extension<<4 | header.CsrcCount),
+		byte(header.Marker<<7 | header.PayloadType),
+		byte(header.SequenceNumber >> 8),
+		byte(header.SequenceNumber & 0xFF),
+		byte(header.Timestamp >> 24),
+		byte(header.Timestamp >> 16),
+		byte(header.Timestamp >> 8),
+		byte(header.Timestamp & 0xFF),
+		byte(header.Ssrc >> 24),
+		byte(header.Ssrc >> 16),
+		byte(header.Ssrc >> 8),
+		byte(header.Ssrc & 0xFF),
+	}
+}
+
+func (header *Header) Log() {
 	log.Printf("RTP Header:\n"+
 		"Version: %v, Padding: %v, Extension: %v, CsrcCount: %v, Marker: %v, "+
 		"PayloadType: %v, SequenceNumber: %v, TimeStamp: %v, Ssrc: %v",

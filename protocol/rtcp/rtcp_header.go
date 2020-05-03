@@ -19,6 +19,7 @@ func NewHeader() *Header {
 		ReceptionReportCount: 1,
 		PayloadType:          201,
 		Length:               32,
+		Ssrc:                 9999,
 	}
 }
 
@@ -39,7 +40,7 @@ func NewHeaderFromBytes(payload []byte) *Header {
 	return resultHeader
 }
 
-func (header Header) TransformToBytes() [HeaderSize]byte {
+func (header *Header) TransformToBytes() [HeaderSize]byte {
 	return [HeaderSize]byte{
 		header.Version<<6 | header.Padding<<5 | header.ReceptionReportCount,
 		header.PayloadType,

@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const DefaultRtcpInterval = 400
+const DefaultRtcpInterval = 5
 
 type RtcpSender struct {
 	rtpReceiver        *RtpReceiver
@@ -22,7 +22,7 @@ type RtcpSender struct {
 }
 
 func NewRtcpSender(rtpReceiver *RtpReceiver) *RtcpSender {
-	interval := time.Millisecond * time.Duration(DefaultRtcpInterval)
+	interval := time.Second * time.Duration(DefaultRtcpInterval)
 
 	result := RtcpSender{
 		rtpReceiver: rtpReceiver,

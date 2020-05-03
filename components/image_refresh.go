@@ -37,6 +37,7 @@ func (ir *ImageRefresh) updateImageInGui() {
 func (ir *ImageRefresh) Start() {
 	ir.started = true
 	ir.ticker = time.NewTicker(33 * time.Millisecond)
+	ir.interval = 33 * time.Millisecond
 
 	go func() {
 		for {

@@ -37,7 +37,7 @@ func NewPacketFromBytes(packetAsBytes []byte) *Packet {
 	}
 }
 
-func (packet Packet) TransformToBytes() []byte {
+func (packet *Packet) TransformToBytes() []byte {
 	result := make([]byte, HeaderSize+BodySize)
 	headerAsBytes := packet.Header.TransformToBytes()
 
@@ -52,7 +52,7 @@ func (packet Packet) TransformToBytes() []byte {
 	return result
 }
 
-func (packet Packet) Log() {
+func (packet *Packet) Log() {
 	log.Printf("RTCP:\n"+
 		"Fraction Lost: %v, Cumulative Lost: %v, Highest Seq Num: %v",
 		packet.FractionLost, packet.CumulativeLost, packet.HighestSeqNum)

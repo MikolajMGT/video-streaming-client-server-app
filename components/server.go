@@ -29,20 +29,18 @@ type RtspServer struct {
 	videoFileName        string
 	sessionId            string
 	sequentialNumber     int
-	componentsStarted    bool
-	IsStreaming          bool
+	isClientSide         bool
 }
 
 func NewServer(clientConnection net.Conn, mainChannel chan *rtp.Packet, privateChannel chan *rtp.Packet) *RtspServer {
 	log.Println("[RTSP] server started")
 	return &RtspServer{
-		clientConnection:  clientConnection,
-		sessionId:         uuid.New().String(),
-		State:             state.Init,
-		mainChannel:       mainChannel,
-		privateChannel:    privateChannel,
-		componentsStarted: false,
-		IsStreaming:       false,
+		clientConnection: clientConnection,
+		sessionId:        uuid.New().String(),
+		State:            state.Init,
+		mainChannel:      mainChannel,
+		privateChannel:   privateChannel,
+		isClientSide:     false,
 	}
 }
 
@@ -58,16 +56,15 @@ func NewClientsideServer(port int) *RtspServer {
 		log.Fatalln("[RTSP] error while connecting with client:", err)
 	}
 	return &RtspServer{
-		clientConnection:  clientConnection,
-		sessionId:         uuid.New().String(),
-		State:             state.Init,
-		componentsStarted: false,
-		IsStreaming:       false,
+		clientConnection: clientConnection,
+		sessionId:        uuid.New().String(),
+		State:            state.Init,
+		isClientSide:     false,
 	}
 }
 
 func (srv *RtspServer) SendResponse() {
-	response := fmt.Sprintf("%vSession: %v\r\n", util.FormatHeader(srv.sequentialNumber), srv.sessionId)
+	response := util.FormatHeader(srv.sequentialNumber, srv.sessionId)
 	_, err := srv.clientConnection.Write([]byte(response))
 	if err != nil {
 		log.Fatalln("[RTSP] cannot send response:", err)
@@ -88,22 +85,7 @@ func (srv *RtspServer) Start() {
 	for {
 		srv.ParseRequest()
 		if srv.State == state.Detached {
-			srv.ShutDown()
 			break
-		}
-	}
-}
-
-func (srv *RtspServer) ShutDown() {
-	if srv.componentsStarted {
-		srv.congestionController.Stop()
-		srv.rtpSender.Close()
-		err := srv.clientConnection.Close()
-		if err != nil {
-			log.Println("[RTSP] error while closing connection:", err)
-		}
-		if srv.recvClient != nil {
-			srv.recvClient.onTeardown()
 		}
 	}
 }
@@ -159,11 +141,10 @@ func (srv *RtspServer) OnSetup(rtpDestinationPort int) {
 	srv.congestionController.SetRtpSender(srv.rtpSender)
 	srv.congestionController.Start()
 
-	srv.componentsStarted = true
 	srv.State = state.Ready
 
 	_, err := srv.clientConnection.Write([]byte(util.PrepareSetupResponse(
-		srv.sequentialNumber, rtcpReceiver.ServerPort),
+		srv.sequentialNumber, rtcpReceiver.ServerPort, srv.sessionId),
 	))
 	if err != nil {
 		log.Fatalln("[RTSP] error while sending message:", err)
@@ -178,11 +159,10 @@ func (srv *RtspServer) onRecord() {
 			srv.recvClient = NewServersideClient(srv, "localhost",
 				srv.clientsideServerPort, "livestream")
 			srv.recvClient.onSetup()
-			srv.IsStreaming = true
+			srv.isClientSide = true
 		}
 		srv.recvClient.onPlay()
 		srv.SendResponse()
-		srv.rtpSender.Start()
 		srv.State = state.Recording
 		log.Println("[RTSP] State changed: RECORDING")
 	}
@@ -190,7 +170,7 @@ func (srv *RtspServer) onRecord() {
 
 func (srv *RtspServer) onPlay() {
 	srv.SendResponse()
-	if !srv.IsStreaming {
+	if !srv.isClientSide {
 		srv.frameLoader.Start()
 	}
 	srv.rtpSender.Start()
@@ -201,16 +181,24 @@ func (srv *RtspServer) onPlay() {
 func (srv *RtspServer) OnPause() {
 	if srv.State == state.Recording {
 		srv.recvClient.onPause()
+	} else {
+		srv.rtpSender.Stop()
 	}
 	srv.SendResponse()
-	srv.rtpSender.Stop()
 	srv.State = state.Ready
 	log.Println("[RTSP] State changed: READY")
 }
 
 func (srv *RtspServer) OnTeardown() {
-	srv.SendResponse()
-	srv.rtpSender.Stop()
+	srv.congestionController.Stop()
+	srv.rtpSender.Close()
+	err := srv.clientConnection.Close()
+	if err != nil {
+		log.Println("[RTSP] error while closing connection:", err)
+	}
+	if srv.recvClient != nil {
+		srv.recvClient.onTeardown()
+	}
 	srv.State = state.Init
 	log.Println("[RTSP] State changed: INIT")
 }

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"streming_server/protocol/large_udp"
 	"streming_server/protocol/rtp"
 	"streming_server/video"
 	"strings"
@@ -19,7 +18,7 @@ type RtpSender struct {
 	congestionController *CongestionController
 	frameSync            *video.FrameSync
 	ticker               *time.Ticker
-	clientConnection     *large_udp.LargeUdpConn
+	clientConnection     *net.UDPConn
 	interval             time.Duration
 	frameBuffer          []byte
 	doneCheck            chan bool
@@ -41,23 +40,22 @@ func NewRtpSender(
 	if err != nil {
 		log.Fatalln("[RTP] cannot resolve rtp connection:", err)
 	}
-	largeUdpConn := large_udp.NewLargeUdpConnWithSize(clientConnection, 64000)
 
 	result := RtpSender{
 		rtcpReceiver:         rtcpReceiver,
 		congestionController: congestionController,
 		frameSync:            frameSync,
 		interval:             time.Duration(DefaultInterval) * time.Millisecond,
-		frameBuffer:          make([]byte, 300000),
+		frameBuffer:          make([]byte, 65507),
 		doneCheck:            make(chan bool),
-		clientConnection:     largeUdpConn,
+		clientConnection:     clientConnection,
 		started:              false,
 	}
 
 	return &result
 }
 
-func (s *RtpSender) SendFrame() {
+func (s *RtpSender) sendFrame() {
 
 	if s.frameSync.Empty() {
 		return
@@ -69,7 +67,7 @@ func (s *RtpSender) SendFrame() {
 		return
 	}
 
-	//s.congestionController.AdjustCompressionQuality(s.frameBuffer, imageLength)
+	s.congestionController.AdjustCompressionQuality(s.frameBuffer, len(data))
 	rtpPacket := rtp.NewPacket(
 		rtp.NewHeader(
 			MjpegType, s.frameSync.CurrentSeqNum, s.frameSync.CurrentSeqNum*s.frameSync.FramePeriod,
@@ -96,7 +94,7 @@ func (s *RtpSender) Start() {
 			case <-s.doneCheck:
 				return
 			case <-s.ticker.C:
-				s.SendFrame()
+				s.sendFrame()
 			}
 		}
 	}()

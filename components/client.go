@@ -109,6 +109,7 @@ func (rc *RtspClient) onSetup() {
 func (rc *RtspClient) onRecord() {
 	log.Println("[GUI] record button has been pressed.")
 	if rc.state == state.Ready {
+		rc.sequentialNumber++
 		rc.sendRequest(message.Record)
 		if rc.server == nil {
 			rc.server = NewClientsideServer(rc.clientsideSrvPort)
@@ -210,7 +211,9 @@ func (rc *RtspClient) onTeardown() {
 	if replyCode == "200" {
 		rc.state = state.Init
 
-		rc.imageRefresh.Stop()
+		if rc.imageRefresh != nil {
+			rc.imageRefresh.Stop()
+		}
 		rc.rtpReceiver.Close()
 		rc.rtcpSender.Close()
 
@@ -220,7 +223,7 @@ func (rc *RtspClient) onTeardown() {
 		}
 
 		if rc.server != nil {
-			rc.server.ShutDown()
+			rc.server.OnTeardown()
 		}
 
 		log.Println("[RTSP] new client State: INIT")
@@ -247,7 +250,8 @@ func (rc *RtspClient) sendRequest(requestType message.Message) {
 
 	_, err := rc.serverConnection.Write([]byte(request))
 	if err != nil {
-		log.Fatalln("[RTSP] error while sending request to the server:", err)
+		log.Println("[RTSP] error while sending request to the server:", err)
+		return
 	}
 }
 
@@ -257,7 +261,8 @@ func (rc *RtspClient) parseResponse() string {
 	responseBytes := make([]byte, 10000)
 	_, err := rc.serverConnection.Read(responseBytes)
 	if err != nil {
-		log.Fatalln("[RTSP] error while reading response from server:", err)
+		log.Println("[RTSP] error while reading response from server:", err)
+		return ""
 	}
 	responseLines := strings.Split(string(responseBytes), "\r\n")
 
@@ -269,22 +274,14 @@ func (rc *RtspClient) parseResponse() string {
 		log.Println("\t[RTSP message]", line)
 		requestElements = append(requestElements, strings.Split(line, " ")...)
 	}
-
 	replyCode := requestElements[1]
 	if replyCode == "200" {
-		thirdLineParam := requestElements[5]
 		if rc.state == state.Init {
-			if thirdLineParam == "Session:" {
-				sessionId := requestElements[6]
-				rc.sessionId = sessionId
-			} else if thirdLineParam == "Transport:" {
-				if !rc.isServerside {
-					rc.imageRefresh.SetInterval(time.Duration(33) * time.Millisecond)
-				}
-				ports, err := util.ParseParameter(requestElements[6], "server_port")
-				if err == nil {
-					rc.rtcpSender.InitConnection(ports[0])
-				}
+			sessionId := requestElements[6]
+			rc.sessionId = sessionId
+			ports, err := util.ParseParameter(requestElements[8], "server_port")
+			if err == nil {
+				rc.rtcpSender.InitConnection(ports[0])
 			}
 		}
 	} else {

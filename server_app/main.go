@@ -26,23 +26,7 @@ func main() {
 		log.Println("[ERROR] error while opening connection:", err)
 	}
 
-	go func(serverMap *sync.Map) {
-		for {
-			packet := <-mainChannel
-			serverMap.Range(
-				func(k, v interface{}) bool {
-					srv := k.(*components.RtspServer)
-					privateChan := v.(chan *rtp.Packet)
-					if srv.State == state.Playing {
-						privateChan <- packet
-					} else if srv.State == state.Detached {
-						serverMap.Delete(srv)
-					}
-					return true
-				},
-			)
-		}
-	}(serverMap)
+	go runDataDisposer(serverMap, mainChannel)
 
 	for {
 		clientConnection, err := listener.Accept()
@@ -56,5 +40,23 @@ func main() {
 			serverMap.LoadOrStore(srv, privateChannel)
 			srv.Start()
 		}(clientConnection, serverMap)
+	}
+}
+
+func runDataDisposer(serverMap *sync.Map, mainChannel chan *rtp.Packet) {
+	for {
+		packet := <-mainChannel
+		serverMap.Range(
+			func(k, v interface{}) bool {
+				srv := k.(*components.RtspServer)
+				privateChan := v.(chan *rtp.Packet)
+				if srv.State == state.Playing {
+					privateChan <- packet
+				} else if srv.State == state.Detached {
+					serverMap.Delete(srv)
+				}
+				return true
+			},
+		)
 	}
 }
