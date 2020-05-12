@@ -13,6 +13,7 @@ import (
 	"streming_server/protocol/rtsp/state"
 	"streming_server/util"
 	"streming_server/video"
+	"strings"
 )
 
 type RtspServer struct {
@@ -47,7 +48,7 @@ func NewServer(clientConnection net.Conn, mainChannel chan *rtp.Packet, privateC
 // used when client is currently streaming video
 func NewClientsideServer(port int) *RtspServer {
 	log.Println("[RTSP] clientside server started")
-	listener, err := net.Listen("tcp", fmt.Sprint("localhost:", port))
+	listener, err := net.Listen("tcp", fmt.Sprint(":", port))
 	if err != nil {
 		log.Fatalln("[RTSP] cannot open connection:", err)
 	}
@@ -133,7 +134,7 @@ func (srv *RtspServer) ParseRequest() message.Message {
 func (srv *RtspServer) OnSetup(rtpDestinationPort int) {
 	srv.frameSync = video.NewFrameSync()
 	srv.frameLoader = NewFrameLoader(srv.frameSync, srv.privateChannel)
-	rtcpReceiver := NewRtcpReceiver(srv.clientConnection.RemoteAddr())
+	rtcpReceiver := NewRtcpReceiver()
 	srv.congestionController = NewCongestionController(rtcpReceiver, srv.frameSync)
 	srv.rtpSender = NewRtpSender(srv.clientConnection.RemoteAddr(), rtpDestinationPort,
 		srv.congestionController, rtcpReceiver, srv.frameSync)
@@ -156,8 +157,8 @@ func (srv *RtspServer) OnSetup(rtpDestinationPort int) {
 func (srv *RtspServer) onRecord() {
 	if srv.State == state.Ready {
 		if srv.recvClient == nil {
-			srv.recvClient = NewServersideClient(srv, "localhost",
-				srv.clientsideServerPort, "livestream")
+			address := strings.Split(srv.clientConnection.RemoteAddr().String(), ":")[0]
+			srv.recvClient = NewServersideClient(srv, address, srv.clientsideServerPort, "livestream")
 			srv.recvClient.onSetup()
 			srv.isClientSide = true
 		}
@@ -192,13 +193,10 @@ func (srv *RtspServer) OnPause() {
 func (srv *RtspServer) OnTeardown() {
 	srv.congestionController.Stop()
 	srv.rtpSender.Close()
-	err := srv.clientConnection.Close()
-	if err != nil {
-		log.Println("[RTSP] error while closing connection:", err)
-	}
 	if srv.recvClient != nil {
 		srv.recvClient.onTeardown()
 	}
+	srv.SendResponse()
 	srv.State = state.Init
 	log.Println("[RTSP] State changed: INIT")
 }
@@ -209,5 +207,12 @@ func (srv *RtspServer) OnDescribe() {
 	))
 	if err != nil {
 		log.Fatalln("[RTSP] error while sending message:", err)
+	}
+}
+
+func (srv *RtspServer) CloseConnection() {
+	err := srv.clientConnection.Close()
+	if err != nil {
+		log.Println("[RTSP] error while closing connection:", err)
 	}
 }

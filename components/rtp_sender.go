@@ -47,7 +47,6 @@ func NewRtpSender(
 		frameSync:            frameSync,
 		interval:             time.Duration(DefaultInterval) * time.Millisecond,
 		frameBuffer:          make([]byte, 65507),
-		doneCheck:            make(chan bool),
 		clientConnection:     clientConnection,
 		started:              false,
 	}
@@ -87,6 +86,7 @@ func (s *RtpSender) Start() {
 	s.rtcpReceiver.Start()
 	s.started = true
 	s.ticker = time.NewTicker(s.interval)
+	s.doneCheck = make(chan bool)
 
 	go func() {
 		for {
@@ -103,7 +103,8 @@ func (s *RtpSender) Start() {
 func (s *RtpSender) Stop() {
 	if s.started {
 		s.rtcpReceiver.Stop()
-		s.doneCheck <- true
+		s.started = false
+		close(s.doneCheck)
 		s.ticker.Stop()
 	}
 }

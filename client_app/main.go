@@ -16,5 +16,6 @@ func main() {
 	serverPort := os.Args[2]
 	videoFileName := "livestream"
 
-	components.NewClient(serverAddress, serverPort, videoFileName)
+	client := components.NewClient(serverAddress, serverPort, videoFileName)
+	client.CloseConnection()
 }

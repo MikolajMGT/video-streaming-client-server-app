@@ -1,7 +1,6 @@
 package components
 
 import (
-	"fmt"
 	"log"
 	"net"
 	"streming_server/protocol/rtcp"
@@ -34,8 +33,8 @@ func NewRtcpSender(rtpReceiver *RtpReceiver) *RtcpSender {
 	return &result
 }
 
-func (s *RtcpSender) InitConnection(serverPort string) {
-	address, err := net.ResolveUDPAddr("udp", fmt.Sprint("127.0.0.1:", serverPort))
+func (s *RtcpSender) InitConnection(serverAddress string) {
+	address, err := net.ResolveUDPAddr("udp", serverAddress)
 	if err != nil {
 		log.Fatalln("[RTCP] error while resolving rtcp address:", err)
 	}

@@ -21,14 +21,13 @@ type RtcpReceiver struct {
 	ServerPort      string
 }
 
-func NewRtcpReceiver(clientAddress net.Addr) *RtcpReceiver {
-	addressAndPort := strings.Split(clientAddress.String(), ":")
-	address := fmt.Sprintf("%v:%v", addressAndPort[0], 0)
+func NewRtcpReceiver() *RtcpReceiver {
+	address := fmt.Sprintf(":0")
 	udpConn, err := net.ListenPacket("udp", address)
 	if err != nil {
 		log.Fatalln("[RTCP] error while opening connection:", err)
 	}
-	serverPort := strings.Split(udpConn.LocalAddr().String(), ":")[1]
+	serverPort := strings.Split(udpConn.LocalAddr().String(), ":")[3]
 
 	return &RtcpReceiver{
 		interval:        DefaultRtcpInterval * time.Millisecond,

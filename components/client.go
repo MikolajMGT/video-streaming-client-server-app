@@ -61,7 +61,6 @@ func NewClient(serverAddress string, serverPort string, videoFileName string) *R
 	rtspClient.isServerside = false
 	rtspClient.view.StartGUI()
 
-	log.Println("[RTSP] connected with server.")
 	return rtspClient
 }
 
@@ -207,25 +206,21 @@ func (rc *RtspClient) onTeardown() {
 	rc.sequentialNumber++
 	rc.sendRequest(message.Teardown)
 	replyCode := rc.parseResponse()
-
 	if replyCode == "200" {
 		rc.state = state.Init
-
 		if rc.imageRefresh != nil {
 			rc.imageRefresh.Stop()
 		}
 		rc.rtpReceiver.Close()
 		rc.rtcpSender.Close()
 
-		err := rc.serverConnection.Close()
-		if err != nil {
-			log.Println("[RTSP] error while closing connection:", err)
-		}
-
 		if rc.server != nil {
-			rc.server.OnTeardown()
-		}
+			// teardown
+			rc.server.ParseRequest()
+			rc.server.SendResponse()
 
+			rc.broadcast.Stop()
+		}
 		log.Println("[RTSP] new client State: INIT")
 	}
 }
@@ -281,11 +276,25 @@ func (rc *RtspClient) parseResponse() string {
 			rc.sessionId = sessionId
 			ports, err := util.ParseParameter(requestElements[8], "server_port")
 			if err == nil {
-				rc.rtcpSender.InitConnection(ports[0])
+				serverAddress := strings.Split(rc.serverConnection.RemoteAddr().String(), ":")[0]
+				rc.rtcpSender.InitConnection(fmt.Sprintf("%v:%v", serverAddress, ports[0]))
 			}
 		}
 	} else {
 		log.Printf("[RTSP] server returned response with error code %v", replyCode)
 	}
 	return replyCode
+}
+
+func (rc *RtspClient) CloseConnection() {
+	if rc.imageRefresh != nil {
+		rc.imageRefresh.Stop()
+	}
+	rc.rtpReceiver.Close()
+	rc.rtcpSender.Close()
+
+	err := rc.serverConnection.Close()
+	if err != nil {
+		log.Println("[RTSP] error while closing connection:", err)
+	}
 }
