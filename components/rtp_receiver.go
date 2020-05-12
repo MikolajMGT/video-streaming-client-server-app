@@ -1,7 +1,6 @@
 package components
 
 import (
-	"fmt"
 	"log"
 	"net"
 	"streming_server/protocol/rtp"
@@ -37,7 +36,6 @@ func NewRtpReceiver(frameSync *video.FrameSync, view *ui.View) *RtpReceiver {
 		log.Fatalln("[RTP] cannot make rtp connection:", err)
 	}
 	listeningPort := strings.Split(udpConn.LocalAddr().String(), ":")[3]
-	fmt.Println(listeningPort, "XDDD")
 
 	return &RtpReceiver{
 		frameSync:     frameSync,
@@ -63,7 +61,6 @@ func (r *RtpReceiver) SetStartTime(startTime int64) {
 func (r *RtpReceiver) receive() {
 	log.Println("[RTP] received packet")
 	buf := make([]byte, 65507)
-	fmt.Println(r.udpCon.LocalAddr().String(), "tej")
 	packetLength, _, err := r.udpCon.ReadFrom(buf)
 
 	if packetLength == 0 {
@@ -103,7 +100,7 @@ func (r *RtpReceiver) receive() {
 }
 
 func (r *RtpReceiver) receiveAndForward() {
-	log.Println("[rtp] received and forwarded rtp packet")
+	log.Println("[RTP] received and forwarded rtp packet")
 
 	buf := make([]byte, 65507)
 	packetLength, _, err := r.udpCon.ReadFrom(buf)
