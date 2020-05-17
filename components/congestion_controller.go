@@ -47,15 +47,16 @@ func (cc *CongestionController) adjustSendRate() {
 }
 
 func (cc *CongestionController) AdjustCompressionQuality(frameBuffer []byte, imageLength int) []byte {
-	var frameBytes []byte
 	if cc.rtcpReceiver.congestionLevel > util.NoCongestion {
 		lowerQuality := jpeg.DefaultQuality -
 			int(jpeg.DefaultQuality*0.15*float64(cc.rtcpReceiver.congestionLevel))
 		cc.qualityAdjuster.ChangeCompressionQuality(lowerQuality)
-		frameBytes = cc.qualityAdjuster.Compress(frameBuffer[0:imageLength])
+		frameBytes := cc.qualityAdjuster.Compress(frameBuffer[0:imageLength])
 		log.Println("[CC] quality changed to", lowerQuality)
+		return frameBytes
+	} else {
+		return frameBuffer
 	}
-	return frameBytes
 }
 
 func (cc *CongestionController) Start() {
