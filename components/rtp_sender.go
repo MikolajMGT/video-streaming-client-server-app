@@ -20,7 +20,6 @@ type RtpSender struct {
 	ticker               *time.Ticker
 	clientConnection     *net.UDPConn
 	interval             time.Duration
-	frameBuffer          []byte
 	doneCheck            chan bool
 	started              bool
 }
@@ -46,7 +45,6 @@ func NewRtpSender(
 		congestionController: congestionController,
 		frameSync:            frameSync,
 		interval:             time.Duration(DefaultInterval) * time.Millisecond,
-		frameBuffer:          make([]byte, 65507),
 		clientConnection:     clientConnection,
 		started:              false,
 	}
@@ -66,7 +64,7 @@ func (s *RtpSender) sendFrame() {
 		return
 	}
 
-	s.congestionController.AdjustCompressionQuality(s.frameBuffer, len(data))
+	data = s.congestionController.AdjustCompressionQuality(data, len(data))
 	rtpPacket := rtp.NewPacket(
 		rtp.NewHeader(
 			MjpegType, s.frameSync.CurrentSeqNum, s.frameSync.CurrentSeqNum*s.frameSync.FramePeriod,
