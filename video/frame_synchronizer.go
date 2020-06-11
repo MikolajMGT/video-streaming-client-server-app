@@ -1,19 +1,18 @@
 package video
 
 import (
-	"github.com/enriquebris/goconcurrentqueue"
-	"log"
+	"github.com/kyroy/priority-queue"
 )
 
 type FrameSync struct {
-	FramesQueue   *goconcurrentqueue.FIFO
+	FramesQueue   *pq.PriorityQueue
 	FramePeriod   int
 	CurrentSeqNum int
 }
 
 func NewFrameSync() *FrameSync {
 	return &FrameSync{
-		FramesQueue:   goconcurrentqueue.NewFIFO(),
+		FramesQueue:   pq.NewPriorityQueue(),
 		FramePeriod:   33,
 		CurrentSeqNum: 0,
 	}
@@ -21,22 +20,16 @@ func NewFrameSync() *FrameSync {
 
 func (fs *FrameSync) AddFrame(image []byte, sequentialNumber int) {
 	if sequentialNumber > fs.CurrentSeqNum {
-		err := fs.FramesQueue.Enqueue(image)
-		if err != nil {
-			log.Fatalln("[ERROR] cannot add frame to queue:", err)
-		}
+		fs.FramesQueue.Insert(image, float64(sequentialNumber))
 	}
 }
 
 func (fs *FrameSync) NextFrame() []byte {
 	fs.CurrentSeqNum++
-	data, err := fs.FramesQueue.DequeueOrWaitForNextElement()
-	if err != nil {
-		log.Fatalln("[ERROR] cannot get frame from queue:", err)
-	}
+	data := fs.FramesQueue.PopLowest()
 	return data.([]byte)
 }
 
 func (fs *FrameSync) Empty() bool {
-	return fs.FramesQueue.GetLen() == 0
+	return fs.FramesQueue.Len() == 0
 }
