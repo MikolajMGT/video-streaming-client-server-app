@@ -53,17 +53,10 @@ func NewRtpSender(
 }
 
 func (s *RtpSender) sendFrame() {
-
 	if s.frameSync.Empty() {
 		return
 	}
 	data := s.frameSync.NextFrame()
-
-	if len(data) == 0 {
-		s.Stop()
-		return
-	}
-
 	data = s.congestionController.AdjustCompressionQuality(data, len(data))
 	rtpPacket := rtp.NewPacket(
 		rtp.NewHeader(
@@ -118,5 +111,6 @@ func (s *RtpSender) Close() {
 
 func (s *RtpSender) UpdateInterval(newInterval time.Duration) {
 	s.ticker.Stop()
-	s.ticker = time.NewTicker(newInterval)
+	s.interval = newInterval
+	s.Start()
 }

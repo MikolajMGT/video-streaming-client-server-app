@@ -21,7 +21,7 @@ type RtpReceiver struct {
 	udpCon            net.PacketConn
 	highestRecvSeqNum int
 	cumulativeLost    int
-	expectedSeqNum    int
+	recvPacketsNum    int
 	totalBytes        int
 	doneCheck         chan bool
 	startTime         int64
@@ -80,55 +80,49 @@ func (r *RtpReceiver) receive() {
 	r.totalPlayTime += currentTime - r.startTime
 	r.startTime = currentTime
 
-	r.expectedSeqNum++
+	r.recvPacketsNum++
 	if rtpPacket.Header.SequenceNumber > r.highestRecvSeqNum {
 		r.highestRecvSeqNum = rtpPacket.Header.SequenceNumber
 	}
-	if r.expectedSeqNum != rtpPacket.Header.SequenceNumber {
-		r.cumulativeLost++
-	}
+	r.cumulativeLost = r.highestRecvSeqNum - r.recvPacketsNum
 
 	dataRate := 0.0
 	if r.totalPlayTime != 0 {
 		dataRate = float64(r.totalBytes) / (float64(r.totalPlayTime) / 1000)
 	}
-	fractionLost := r.cumulativeLost / r.highestRecvSeqNum
 	r.totalBytes += len(rtpPacket.Payload)
 
-	r.view.UpdateStatistics(r.totalBytes, fractionLost, dataRate)
+	r.view.UpdateStatistics(r.totalBytes, r.cumulativeLost, dataRate)
 	r.frameSync.AddFrame(rtpPacket.Payload, rtpPacket.Header.SequenceNumber)
 }
 
 func (r *RtpReceiver) receiveAndForward() {
 	log.Println("[RTP] received and forwarded rtp packet")
-
 	buf := make([]byte, 65507)
 	packetLength, _, err := r.udpCon.ReadFrom(buf)
-	if err != nil {
-		log.Println("[RTP] error while reading packet:", err)
-	}
 
 	if packetLength == 0 {
 		return
 	}
 
+	if err != nil {
+		log.Println("[RTP] error while reading packet:", err)
+	}
 	buf = buf[:packetLength]
+
+	rtpPacket := rtp.NewPacketFromBytes(buf, packetLength)
+	rtpPacket.Header.Log()
 
 	//current unix time in milliseconds
 	currentTime := time.Now().UnixNano() / int64(time.Millisecond)
 	r.totalPlayTime += currentTime - r.startTime
 	r.startTime = currentTime
 
-	rtpPacket := rtp.NewPacketFromBytes(buf, packetLength)
-	rtpPacket.Header.Log()
-
-	r.expectedSeqNum++
+	r.recvPacketsNum++
 	if rtpPacket.Header.SequenceNumber > r.highestRecvSeqNum {
 		r.highestRecvSeqNum = rtpPacket.Header.SequenceNumber
 	}
-	if r.expectedSeqNum != rtpPacket.Header.SequenceNumber {
-		r.cumulativeLost++
-	}
+	r.cumulativeLost = r.highestRecvSeqNum - r.recvPacketsNum
 
 	r.totalBytes += len(rtpPacket.Payload)
 	r.server.mainChannel <- rtpPacket
