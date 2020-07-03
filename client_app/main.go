@@ -18,4 +18,5 @@ func main() {
 
 	client := components.NewClient(serverAddress, serverPort, videoFileName)
 	client.CloseConnection()
+
 }
